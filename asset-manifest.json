@@ -1,11 +1,11 @@
 {
   "files": {
     "main.css": "/Chekea-Servicios/static/css/main.593ecbda.css",
-    "main.js": "/Chekea-Servicios/static/js/main.ecee157a.js",
+    "main.js": "/Chekea-Servicios/static/js/main.0acbb3c8.js",
     "static/js/988.0fc5c201.chunk.js": "/Chekea-Servicios/static/js/988.0fc5c201.chunk.js",
     "static/js/655.6f21535a.chunk.js": "/Chekea-Servicios/static/js/655.6f21535a.chunk.js",
     "static/js/499.c22c7a8b.chunk.js": "/Chekea-Servicios/static/js/499.c22c7a8b.chunk.js",
-    "static/js/291.bd81d001.chunk.js": "/Chekea-Servicios/static/js/291.bd81d001.chunk.js",
+    "static/js/291.68dd2f8c.chunk.js": "/Chekea-Servicios/static/js/291.68dd2f8c.chunk.js",
     "static/js/821.14baf177.chunk.js": "/Chekea-Servicios/static/js/821.14baf177.chunk.js",
     "static/js/412.faeab747.chunk.js": "/Chekea-Servicios/static/js/412.faeab747.chunk.js",
     "static/js/671.abf97bff.chunk.js": "/Chekea-Servicios/static/js/671.abf97bff.chunk.js",
@@ -22,6 +22,6 @@
   },
   "entrypoints": [
     "static/css/main.593ecbda.css",
-    "static/js/main.ecee157a.js"
+    "static/js/main.0acbb3c8.js"
   ]
 }
