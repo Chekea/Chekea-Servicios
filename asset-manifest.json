@@ -1,28 +1,27 @@
 {
   "files": {
     "main.css": "/Chekea-Servicios/static/css/main.593ecbda.css",
-    "main.js": "/Chekea-Servicios/static/js/main.2a921172.js",
-    "static/js/988.780a7ecf.chunk.js": "/Chekea-Servicios/static/js/988.780a7ecf.chunk.js",
-    "static/js/655.a2c92337.chunk.js": "/Chekea-Servicios/static/js/655.a2c92337.chunk.js",
-    "static/js/499.321b5aec.chunk.js": "/Chekea-Servicios/static/js/499.321b5aec.chunk.js",
-    "static/js/291.12dd21ef.chunk.js": "/Chekea-Servicios/static/js/291.12dd21ef.chunk.js",
-    "static/js/683.65086215.chunk.js": "/Chekea-Servicios/static/js/683.65086215.chunk.js",
-    "static/js/412.e62cff5f.chunk.js": "/Chekea-Servicios/static/js/412.e62cff5f.chunk.js",
-    "static/js/671.26fcde82.chunk.js": "/Chekea-Servicios/static/js/671.26fcde82.chunk.js",
-    "static/js/720.0e03b2fe.chunk.js": "/Chekea-Servicios/static/js/720.0e03b2fe.chunk.js",
-    "static/js/48.d2098191.chunk.js": "/Chekea-Servicios/static/js/48.d2098191.chunk.js",
+    "main.js": "/Chekea-Servicios/static/js/main.ecee157a.js",
+    "static/js/988.0fc5c201.chunk.js": "/Chekea-Servicios/static/js/988.0fc5c201.chunk.js",
+    "static/js/655.6f21535a.chunk.js": "/Chekea-Servicios/static/js/655.6f21535a.chunk.js",
+    "static/js/499.c22c7a8b.chunk.js": "/Chekea-Servicios/static/js/499.c22c7a8b.chunk.js",
+    "static/js/291.bd81d001.chunk.js": "/Chekea-Servicios/static/js/291.bd81d001.chunk.js",
+    "static/js/821.14baf177.chunk.js": "/Chekea-Servicios/static/js/821.14baf177.chunk.js",
+    "static/js/412.faeab747.chunk.js": "/Chekea-Servicios/static/js/412.faeab747.chunk.js",
+    "static/js/671.abf97bff.chunk.js": "/Chekea-Servicios/static/js/671.abf97bff.chunk.js",
+    "static/js/720.22ce70fb.chunk.js": "/Chekea-Servicios/static/js/720.22ce70fb.chunk.js",
+    "static/js/48.f0e6c2f6.chunk.js": "/Chekea-Servicios/static/js/48.f0e6c2f6.chunk.js",
     "static/js/206.53c48c4b.chunk.js": "/Chekea-Servicios/static/js/206.53c48c4b.chunk.js",
     "static/js/277.aeb6a8c2.chunk.js": "/Chekea-Servicios/static/js/277.aeb6a8c2.chunk.js",
-    "static/js/338.644652d7.chunk.js": "/Chekea-Servicios/static/js/338.644652d7.chunk.js",
-    "static/js/994.0c0fa67d.chunk.js": "/Chekea-Servicios/static/js/994.0c0fa67d.chunk.js",
-    "static/js/734.1fda714b.chunk.js": "/Chekea-Servicios/static/js/734.1fda714b.chunk.js",
-    "static/js/481.41bd56fe.chunk.js": "/Chekea-Servicios/static/js/481.41bd56fe.chunk.js",
+    "static/js/246.f003a95b.chunk.js": "/Chekea-Servicios/static/js/246.f003a95b.chunk.js",
+    "static/js/122.fb92897a.chunk.js": "/Chekea-Servicios/static/js/122.fb92897a.chunk.js",
+    "static/js/513.de9778a5.chunk.js": "/Chekea-Servicios/static/js/513.de9778a5.chunk.js",
     "static/media/Linotte-Regular.ttf": "/Chekea-Servicios/static/media/Linotte-Regular.e6583154eeda6d7b0b48.ttf",
     "static/media/Linotte-SemiBold.ttf": "/Chekea-Servicios/static/media/Linotte-SemiBold.63463789e30b16c728de.ttf",
     "index.html": "/Chekea-Servicios/index.html"
   },
   "entrypoints": [
     "static/css/main.593ecbda.css",
-    "static/js/main.2a921172.js"
+    "static/js/main.ecee157a.js"
   ]
 }
