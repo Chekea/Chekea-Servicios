@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Redirecting...</title>
+    <script type="text/javascript">
+      // Redirect to index.html and preserve the hash portion of the URL
+      var path = window.location.pathname;
+      var hash = window.location.hash;
+
+      // Redirect to index.html with the existing hash
+      if (!hash) {
+        window.location.replace('/Prueba/#' + path);
+      }
+    </script>
+  </head>
+  <body>
+    <h1>Redirecting...</h1>
+  </body>
+</html>
