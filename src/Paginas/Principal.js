@@ -8,12 +8,12 @@ import { compressImage } from "../ayuda";
 import TensorFlow from "./componentes/TensorFlow";
 
 const items = [
-  { name: "Compras", link: "/Nacional" },
-  { name: "Exterior", link: "/Exterior" },
-  { name: "Buscar", link: "/Buscar" },
-  { name: "P2P Vuelos", link: "/Contabilidad" },
+  // { name: "Compras", link: "/Nacional" },
+  // { name: "Exterior", link: "/Exterior" },
+  { name: "MaisaProd", link: "/Buscar" },
+  // { name: "P2P Vuelos", link: "/Contabilidad" },
   { name: "Publicar", link: "/Publicar" },
-  { name: "Farmacias", link: "/Farmacias" },
+  // { name: "Farmacias", link: "/Farmacias" },
 ];
 
 const colors = ["#FFCDD2", "#C8E6C9", "#BBDEFB", "#FFECB3"];
