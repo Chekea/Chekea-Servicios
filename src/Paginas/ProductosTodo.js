@@ -188,7 +188,7 @@ const ProductoTodo = () => {
   const HANDLEDETALES = (codigo) => {
     navigate(`/Buscar/Editar/${codigo}/Exterior`);
   };
-
+  //EIBY
   // 🧠 Restore saved state on mount
   useEffect(() => {
     const savedState = sessionStorage.getItem("productoTodoState");

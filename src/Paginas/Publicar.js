@@ -9,14 +9,38 @@ import {
   Button,
   Grid,
   CircularProgress,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import AddAPhotoIcon from "@mui/icons-material/AddAPhoto";
-import { get, ref, getDatabase, push, set, update } from "firebase/database";
-import { analizar, capitalizeFirstLetter, compressImage } from "../ayuda";
-import app from "./../Servicios/firebases";
+import {
+  get,
+  ref,
+  getDatabase,
+  push,
+  set,
+  query,
+  orderByKey,
+  startAt,
+} from "firebase/database";
+import {
+  getFirestore,
+  collection,
+  doc,
+  setDoc,
+  addDoc,
+  limit,
+  getDoc,
+  updateDoc,
+  getDocs,
+  where,
+  deleteField,
+} from "firebase/firestore";
+
+import { capitalizeFirstLetter, compressImage } from "../ayuda";
+import { app } from "./../Servicios/firebases";
 
 import Cabezal from "./componentes/Cabezal";
-import { subircompra, uploadImage } from "../Servicios/DBservices";
 import axios from "axios";
 import * as XLSX from "xlsx";
 import {
@@ -26,7 +50,7 @@ import {
   uploadBytes,
 } from "firebase/storage";
 
-const ImagePreview = ({ file, onRemove, index }) => {
+const ImagePreview = ({ file, onRemove, index, sx }) => {
   const [src, setSrc] = useState("");
 
   useEffect(() => {
@@ -79,10 +103,11 @@ const ImagePreview = ({ file, onRemove, index }) => {
 const Publicar = () => {
   const [title, setTitle] = useState("");
   const [price, setPrice] = useState("");
-  const [dimension, setDimension] = useState("");
-  const [espacio, setEspacio] = useState("");
 
   const [cantidad, setCantidad] = useState("");
+  const [dimension, setDimension] = useState("");
+  const [peso, setpeso] = useState(0);
+
   const [ubicacion, setUbicacion] = useState("");
   const [loading, setLoading] = useState(false); // Loading state
 
@@ -94,75 +119,297 @@ const Publicar = () => {
   const [chips, setChips] = useState([]);
   const [showbox, setShowBox] = useState(true);
   const [imgs, setimgs] = useState(null);
-  let categ = "Otros";
-  // const [chips, setChips] = useState([
-  //   "iPhone 11",
-  //   "iPhone 11 Pro",
-  //   "iPhone 11 Pro Max",
-  //   "iPhone 12",
-  //   "iPhone 12 Mini",
-  //   "iPhone 12 Pro",
-  //   "iPhone 12 Pro Max",
-  //   "iPhone 13",
-  //   "iPhone 13 Mini",
-  //   "iPhone 13 Pro",
-  //   "iPhone 13 Pro Max",
-  //   "iPhone 14",
-  //   "iPhone 14 Plus",
-  //   "iPhone 14 Pro",
-  //   "iPhone 14 Pro Max",
-  //   "iPhone 15",
-  //   "iPhone 15 Plus",
-  //   "iPhone 15 Pro",
-  //   "iPhone 15 Pro Max",
-  //   "iPhone 16",
-  //   "iPhone 16 Plus",
-  //   "iPhone 16 Pro",
-  //   "iPhone 16 Pro Max",
-  // ]);
+  const [selectedPeso, setSelectedPeso] = useState(null);
+  const [selectedDimension, setSelectedDimension] = useState(null);
+  const [selectedCategoria, setSelectedCategoria] = useState(null);
+
+  let categ = "Moda & Accesorios"; //Categoria
+  let country = "China";
+
+  const pesos = [
+    { nombre: "Ultraligero", min: 0.1, max: 0.5 },
+    { nombre: "Ligero", min: 0.51, max: 1.5 },
+    { nombre: "Medio", min: 1.51, max: 3.0 },
+    { nombre: "Pesado", min: 3.01, max: 4.5 },
+    { nombre: "Muy pesado", min: 4.51, max: 5.5 },
+    { nombre: "Extremadamente pesado", min: 5.51, max: 6.0 },
+  ];
+  const subCategorias = [
+    { nombre: "Trajes", estimacion: { min: 0.8, max: 1.4 } },
+    { nombre: "Vestidos", estimacion: { min: 0.5, max: 1.0 } },
+    { nombre: "Camisas", estimacion: { min: 0.2, max: 0.5 } },
+    { nombre: "Bolsos", estimacion: { min: 0.3, max: 0.9 } },
+    { nombre: "Calzado", estimacion: { min: 0.6, max: 1.2 } },
+    { nombre: "Faldas", estimacion: { min: 0.3, max: 0.7 } },
+  ];
+
+  const dimensiones = [
+    { nombre: "Paquete pequeño", min: 0.023, max: 0.03 },
+    { nombre: "Tamaño personal", min: 0.031, max: 0.15 },
+    { nombre: "Paquete mediano", min: 0.151, max: 0.4 },
+    { nombre: "Paquete grande", min: 0.401, max: 0.8 },
+    { nombre: "Caja estándar", min: 0.801, max: 1.2 },
+    { nombre: "Caja extra grande", min: 1.201, max: 1.8 },
+    { nombre: "Carga pesada", min: 1.801, max: 2.2 },
+    { nombre: "Carga industrial", min: 2.201, max: 3.0 },
+  ];
+
   const [chipOptions, setchipOptions] = useState([]);
   const [chipOptionscat, setchipOptionscat] = useState([]);
-
+  console.log(categ);
   const [chipscolor, setChipscolor] = useState([]);
   const [prices, setPrices] = useState({});
   const [inputValue, setInputValue] = useState("");
   const [inputValues, setInputValues] = useState("");
   const [view, setView] = useState("");
   const database = getDatabase(app);
-  const storage = getStorage(app);
-  const pesin = 0.6;
+  const db = getFirestore(app);
 
-  const [file, setFile] = useState(null);
-  const [jsonData, setJsonData] = useState([]); // State para almacenar los datos JSON
-  const [columns, setColumns] = useState([]); // State para almacenar las columnas
+  let maysaID = "y7eJBoQ23feGEF3HAF2sZxpDKig1";
+
+  const storage = getStorage(app);
 
   const handleTitleChange = (e) =>
     setTitle(capitalizeFirstLetter(e.target.value));
   const handlePriceChange = (e) => setPrice(e.target.value);
-  const handleDimension = (e) => setDimension(e.target.value);
-  const handleEspacio = (e) => setEspacio(e.target.value);
 
   const handleCantidad = (e) => setCantidad(e.target.value);
 
-  const handleUbicacion = (e) => setUbicacion(e.target.value);
-
   const handleDetailsChange = (e) => setDetails(e.target.value);
-  const handleImageUpload = (event) => {
-    const files = Array.from(event.target.files);
 
-    if (files.length + images.length <= 9) {
-      files.forEach((file) => {
-        console.log(
-          `File: ${file.name}, Size: ${(file.size / 1024).toFixed(2)} KB`
-        );
-      });
+  const dbRealtime = getDatabase(app);
+  const dbFirestore = getFirestore(app);
 
-      setImages([...images, ...files]);
+  const handleChipClickPeso = (peso) => {
+    // Si el chip ya está seleccionado, lo deselecciona
+    if (selectedPeso === peso) {
+      setSelectedPeso(null);
     } else {
-      alert("You can upload up to 9 images only.");
+      setSelectedPeso(peso);
+    }
+  };
+  const handleChipClickCategoria = (peso) => {
+    // Si el chip ya está seleccionado, lo deselecciona
+    if (selectedPeso === peso) {
+      setSelectedCategoria(null);
+    } else {
+      setSelectedCategoria(peso);
     }
   };
 
+  const handleChipClickDimension = (dimension) => {
+    // Si el chip ya está seleccionado, lo deselecciona
+    if (selectedPeso === dimension) {
+      setSelectedDimension(null);
+    } else {
+      setSelectedDimension(dimension);
+    }
+  };
+
+  // 👉 Tu array de códigos a migrar
+  const codigosArray = [, "-OH1eDCOAABkZleBX2aM"];
+
+  async function migrateProductsFromArray() {
+    try {
+      for (const codigo of codigosArray) {
+        console.log(`🔍 Revisando producto: ${codigo}`);
+
+        // 📌 Verificar si ya existe en Firestore
+        const productoRef = doc(dbFirestore, "productos", codigo);
+        const productoSnap = await getDoc(productoRef);
+
+        if (productoSnap.exists()) {
+          console.log(`⏩ Producto ${codigo} ya migrado. Se omite.`);
+          continue;
+        }
+
+        // 📌 Obtener producto desde RTDB
+        const productoRefRTDB = ref(dbRealtime, `/GE/Exterior/Prod/${codigo}`);
+        const snapshot = await get(productoRefRTDB);
+
+        if (!snapshot.exists()) {
+          console.log(`⚠️ Producto ${codigo} no encontrado en RTDB.`);
+          continue;
+        }
+
+        const producto = snapshot.val();
+
+        console.log(`📦 Migrando producto: ${codigo}`);
+
+        // Datos principales (sin imágenes, tallas, colores)
+        const { Imagenes, Talla, Color, ...rest } = producto;
+
+        // ➕ Añadir campo "origen: China"
+        const productoData = {
+          ...rest,
+          origen: "China",
+        };
+
+        // Guardar producto base en Firestore
+        await setDoc(productoRef, productoData);
+
+        // 3️⃣ Subcolección de imágenes
+        if (Imagenes) {
+          for (const [imgId, imgData] of Object.entries(Imagenes)) {
+            const imgRef = doc(collection(productoRef, "imagenes"), imgId);
+            await setDoc(imgRef, imgData);
+          }
+        }
+
+        // 4️⃣ Subcolección de tallas
+        if (Talla) {
+          for (const [tallaId, tallaData] of Object.entries(Talla)) {
+            const tallaRef = doc(collection(productoRef, "tallas"), tallaId);
+            await setDoc(tallaRef, tallaData);
+          }
+        }
+
+        // 5️⃣ Subcolección de colores
+        if (Color) {
+          for (const [colorId, colorData] of Object.entries(Color)) {
+            const colorRef = doc(collection(productoRef, "colores"), colorId);
+            await setDoc(colorRef, colorData);
+          }
+        }
+
+        console.log(`✅ Producto ${codigo} migrado con éxito.`);
+      }
+
+      console.log("🎉 Migración finalizada para todos los códigos del array.");
+    } catch (error) {
+      console.error("❌ Error migrando productos:", error);
+    }
+  }
+
+  async function verificarProductos() {
+    try {
+      // 1️⃣ Query: leer desde un producto específico en adelante
+      const productosQuery = ref(dbRealtime, "/GE/Exterior/Prod");
+
+      const snapshot = await get(productosQuery);
+
+      if (!snapshot.exists()) {
+        console.log("No se encontraron productos en RTDB desde");
+        return;
+      }
+
+      const productos = snapshot.val();
+
+      // Arrays de control
+      const yaMigrados = [];
+      const noMigrados = [];
+
+      // 2️⃣ Recorrer productos
+      for (const [codigo] of Object.entries(productos)) {
+        console.log(`🔍 Verificando producto: ${codigo}`);
+
+        const productoRef = doc(dbFirestore, "productos", codigo);
+        const productoSnap = await getDoc(productoRef);
+
+        if (productoSnap.exists()) {
+          yaMigrados.push(codigo);
+        } else {
+          noMigrados.push(codigo);
+        }
+      }
+
+      // 📊 Mostrar resultado
+      console.log("✅ Verificación completada.");
+      console.log("Productos YA en Firestore:", yaMigrados);
+      console.log("Productos que NO están en Firestore:", noMigrados);
+
+      return { yaMigrados, noMigrados };
+    } catch (error) {
+      console.error("❌ Error verificando productos:", error);
+    }
+  }
+
+  const migrateGEInfoToFirestore = async () => {
+    try {
+      const dbRealtime = getDatabase(); // Realtime Database
+      const firestore = getFirestore(); // Firestore
+
+      const infoRef = ref(dbRealtime, "/GE/Info");
+      const snapshot = await get(infoRef);
+
+      if (!snapshot.exists()) {
+        console.log("No hay datos en /GE/Info");
+        return;
+      }
+
+      const data = snapshot.val();
+
+      // Iterar sobre cada nodo de /GE/Info
+      for (const key in data) {
+        if (data.hasOwnProperty(key)) {
+          const value = data[key];
+
+          // Solo migrar valores exactos: string, number o boolean
+          if (
+            typeof value === "string" ||
+            typeof value === "number" ||
+            typeof value === "boolean"
+          ) {
+            // Guardar en Firestore como documento separado
+            await setDoc(doc(firestore, "GE_Info", key), { value });
+            console.log(`Migrado: ${key} → ${value}`);
+          } else {
+            console.log(`Omitido ${key}, contiene valores anidados`);
+          }
+        }
+      }
+
+      console.log("Migración completada ✅");
+    } catch (error) {
+      console.error("Error migrando datos:", error);
+    }
+  };
+
+  const subirDatoConID = async () => {
+    try {
+      // Crear referencia de documento con ID automático
+      const docRef = doc(collection(db, "usuarios"));
+      const id = docRef.id; // Obtener ID generado
+
+      // Subir el objeto con el ID incluido
+      await setDoc(docRef, {
+        id: id,
+        man: "eie",
+        nombre: "eiby",
+      });
+
+      console.log("Documento subido con ID ✅", id);
+    } catch (error) {
+      console.error("Error al subir el documento ❌", error);
+    }
+  };
+
+  const handleImageUpload = async (event) => {
+    const files = Array.from(event.target.files);
+    if (files.length + images.length > 9)
+      return alert("You can upload up to 9 images only.");
+
+    try {
+      const compressedFiles = await Promise.all(
+        files.map(async (file) => {
+          console.log(
+            `Original: ${file.name}, ${(file.size / 1024).toFixed(2)} KB`
+          );
+          const compressedFile = await compressImage(file);
+          console.log(
+            `Compressed: ${compressedFile.name}, ${(
+              compressedFile.size / 1024
+            ).toFixed(2)} KB`
+          );
+          return compressedFile;
+        })
+      );
+
+      setImages((prevImages) => [...prevImages, ...compressedFiles]);
+    } catch (error) {
+      console.error("Image compression failed:", error);
+    }
+  };
   const handleRemoveImage = (index) => {
     setImages(images.filter((_, i) => i !== index));
   };
@@ -170,91 +417,252 @@ const Publicar = () => {
     return Date.now();
   };
   // Main Submit Handler
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true); // Start loading
+  // const handleSubmit = async (e) => {
+  //   e.preventDefault();
+  //   setLoading(true); // Start loading
 
-    let fecha = getCurrentTimeInMilliseconds();
+  //   const fecha = getCurrentTimeInMilliseconds();
 
-    try {
-      // Generate new references and keys for the data
-      const newItemRef = push(ref(database, `GE/Exterior/Prod`));
-      const codigo = newItemRef.key;
+  //   try {
+  //     // Genera una nueva referencia de documento con ID automático
+  //     const newItemRef = doc(collection(db, "productos"));
+  //     const codigo = newItemRef.id;
 
-      // Prepare common data object
-      const commonData = await prepareCommonData(codigo, fecha);
+  //     if (images.length < 2) {
+  //       throw new Error("Se necesitan al menos 2 imágenes para continuar.");
+  //     }
 
-      // // Upload images to Firebase and get their URLs
-      console.log(images, "kiee");
-      const imageUrls = await uploadImagesToStorage(images);
+  //     // Prepara datos comunes
+  //     let commonData = await prepareCommonData(codigo, fecha);
 
-      console.log(imageUrls[0]);
+  //     // Subir imágenes y obtener URLs
+  //     const imageUrls = await uploadImagesToStorage(images);
 
-      // // Store first image in 'IMAGEN' field and organize images in the 'imagenes' subnode
-      commonData.Imagen = imageUrls[0];
-      commonData.Imagenes = await createImagesNode(codigo, imageUrls);
+  //     // Guardar imágenes principales y subnodo de imágenes
+  //     commonData.Imagen = imageUrls[0]; // Primera imagen
+  //     commonData.Imagenes = await createImagesNode(codigo, imageUrls);
 
-      // // Organize color and size in their respective subnodes
-      commonData.Color = await createColorsNode(codigo);
-      if (chips.length > 0) {
-        commonData.Talla = await createSizesNode(codigo);
-      }
+  //     // Últimas dos imágenes
+  //     commonData.RealImage = imageUrls[imageUrls.length - 2];
+  //     commonData.PaqueteImage = imageUrls[imageUrls.length - 1];
 
-      // // Submit data to 'prod' node
-      if (commonData["0"]) {
-        commonData = commonData["0"]; // Extrae el subobjeto si se generó incorrectamente
-      }
-      await set(newItemRef, commonData);
+  //     // Guardar imágenes restantes (excluyendo las dos últimas)
+  //     const filteredImages = imageUrls.slice(0, -2);
+  //     commonData.Imagen = filteredImages[0] || "";
+  //     commonData.Imagenes = await createImagesNode(codigo, filteredImages);
 
-      // // Store data in 'filtros' node
-      await storeInFiltrosNode(codigo, commonData);
+  //     // Subnodos para colores y tallas
+  //     commonData.Color = await createColorsNode(codigo);
+  //     if (chips.length > 0) {
+  //       commonData.Talla = await createSizesNode(codigo);
+  //     }
 
-      setLoading(false);
-      setImages([]);
-      setChipscolor([]);
-      setChips([]);
+  //     // Guardar en Firestore
+  //     await setDoc(newItemRef, commonData);
 
-      setTitle("");
-      setDetails("");
-      setPrice("");
-      alert("Data submitted successfully!");
-    } catch (error) {
-      setLoading(false);
-      alert("ERROR INESPERADO");
-      console.error("Transaction failed: ", error);
-    }
-  };
+  //     // Guardar en 'filtros' si es necesario
+  //     // await storeInFiltrosNode(codigo, commonData);
+
+  //     setLoading(false);
+  //     setImages([]);
+  //     setChipscolor([]);
+  //     setChips([]);
+  //     setTitle("");
+  //     setDetails("");
+  //     setPrice("");
+
+  //     alert("Data submitted successfully!");
+  //   } catch (error) {
+  //     setLoading(false);
+  //     alert("ERROR INESPERADO");
+  //     console.error("Transaction failed: ", error);
+  //   }
+  // };
+  function normalizarTexto(texto) {
+    return texto
+      .toLowerCase()
+      .normalize("NFD") // descompone caracteres acentuados
+      .replace(/[\u0300-\u036f]/g, "") // elimina acentos
+      .replace(/[^\w\s]/gi, ""); // elimina caracteres especiales
+  }
 
   // Prepare the common data object with the provided information
   const prepareCommonData = async (codigo, fecha) => {
-    // const vendedor =
-    //   view === "Exterior"
-    //     ? "C0y1aQsV5NZNLBuvprio3vXy2LR2"
-    //     : "kbJogy4k8gN7nSK2QUFXwMpXSXz1";
-    let espace = 0.085;
+    const titulonormalizado = normalizarTexto(title);
+    const tokens = titulonormalizado
+      .toLowerCase()
+      .split(" ")
+      .filter((word) => word.length >= 4) // palabras con 4 o más letras
+      .slice(0, 6); // máximo 6 palabras
 
-    return {
+    const data = {
       Titulo: title,
+      Ttoken: tokens,
       Categoria: categ,
-      Subcategoria: "Otros",
+      Subcategoria: selectedCategoria, // Baño
       Codigo: codigo,
       Precio: parseInt(price),
-      Peso: pesin,
+      Peso: selectedPeso,
+      Dimension: selectedDimension || "Paquete mediano",
       Detalles: details,
       Vistos: 0,
-      Vendedor: "C0y1aQsV5NZNLBuvprio3vXy2LR2",
-      Compras: 0,
+      Vendedor: maysaID,
+      // Compras: 0,
       Fecha: fecha,
-      Descuento: 0,
-      Envio: "Aerea",
-      Stock: true,
-      // Bateria: true,
-
-      Dimension: espace,
-      Pais: "China",
+      // Descuento: 0,
+      Pais: country,
     };
+
+    // 📌 Solo agregar Stock si el país es "Guinea ecuatorial"
+    if (country === "Guinea ecuatorial") {
+      data.Stock = parseInt(cantidad);
+    }
+
+    return data;
   };
 
+  async function actualizarTokens() {
+    try {
+      const productosRef = collection(db, "productos");
+
+      const q = query(productosRef); // ✅ consulta con limit
+
+      const snapshot = await getDocs(q); // ✅ esto devuelve QuerySnapshot
+
+      if (!snapshot.empty) {
+        let actualizados = 0;
+
+        for (const docSnap of snapshot.docs) {
+          const data = docSnap.data();
+
+          if (
+            data.Ttoken &&
+            Array.isArray(data.Ttoken) &&
+            data.Ttoken.length > 0
+          ) {
+            continue;
+          }
+
+          const titulo = data.Titulo;
+          const tituloNormalizado = normalizarTexto(titulo);
+
+          const tokens = tituloNormalizado
+            .split(" ")
+            .filter((word) => word.length >= 4)
+            .slice(0, 5);
+
+          await updateDoc(doc(db, "productos", docSnap.id), {
+            Ttoken: tokens,
+          });
+
+          console.log(`Producto ${docSnap.id} actualizado:`, tokens);
+          actualizados++;
+        }
+
+        console.log(
+          `Proceso terminado. Productos actualizados: ${actualizados}`
+        );
+      } else {
+        console.log("No se encontraron productos.");
+      }
+    } catch (error) {
+      console.error("Error actualizando productos:", error);
+    }
+  }
+
+  async function eliminarCamposConUbicacion() {
+    try {
+      const productosRef = collection(db, "productos");
+
+      // 🔹 Buscar solo los productos que tienen "Ubicacion"
+      const q = query(productosRef, where("Condicion", "!=", ""));
+
+      const snapshot = await getDocs(q);
+
+      if (snapshot.empty) {
+        console.log("No se encontraron productos con Ubicacion.");
+        return;
+      }
+
+      let eliminados = 0;
+
+      for (const docSnap of snapshot.docs) {
+        const data = docSnap.data();
+
+        // Solo si realmente tienen alguno de esos campos
+        const camposAEliminar = {};
+        let tieneCampo = false;
+
+        [
+          "Envio",
+          "Ubicacion",
+          "Duracion",
+          "Condicion",
+          "Tipo",
+          "origen",
+        ].forEach((campo) => {
+          if (data[campo] !== undefined) {
+            camposAEliminar[campo] = deleteField();
+            tieneCampo = true;
+          }
+        });
+
+        if (tieneCampo) {
+          await updateDoc(doc(db, "productos", docSnap.id), camposAEliminar);
+          console.log(`🧹 Campos eliminados en producto ${docSnap.id}`);
+          eliminados++;
+        }
+      }
+
+      console.log(
+        `✅ Proceso completado: ${eliminados} productos actualizados.`
+      );
+    } catch (error) {
+      console.error("❌ Error eliminando campos:", error);
+    }
+  }
+
+  async function moverImagenPrincipal() {
+    try {
+      const productosRef = collection(db, "productos");
+
+      // 🔹 Buscar solo los productos que tienen "imagenPrincipal"
+      const q = query(productosRef, where("ImagenPrincipal", "!=", null));
+      const snapshot = await getDocs(q);
+
+      if (snapshot.empty) {
+        console.log("No se encontraron productos con imagenPrincipal.");
+        return;
+      }
+
+      let actualizados = 0;
+
+      for (const docSnap of snapshot.docs) {
+        const data = docSnap.data();
+
+        // Solo actuar si realmente tiene el campo
+        if (data.ImagenPrincipal !== undefined) {
+          await updateDoc(doc(db, "productos", docSnap.id), {
+            Imagen: data.ImagenPrincipal, // copiar valor
+            ImagenPrincipal: deleteField(), // eliminar campo original
+          });
+
+          console.log(`📸 Imagen movida en producto ${docSnap.id}`);
+          actualizados++;
+        }
+      }
+
+      console.log(
+        `✅ Proceso completado: ${actualizados} productos actualizados.`
+      );
+    } catch (error) {
+      console.error("❌ Error moviendo imagenPrincipal:", error);
+    }
+  }
+
+  // useEffect(() => {
+  //   moverImagenPrincipal();
+  // }, []); // solo se ejecuta una vez
   // Upload images to Firebase Storage and get their URLs
   const uploadImagesToStorage = async (imageFiles) => {
     const imageUrls = [];
@@ -285,58 +693,157 @@ const Publicar = () => {
     }
     return imageUrls;
   };
+  // Función para separar las imágenes en principal, real, paquete y extras
+  const separateImages = (imageUrls) => {
+    if (imageUrls.length < 3)
+      throw new Error("Se necesitan al menos 3 imágenes.");
 
-  // Create the 'imagenes' node with push IDs and URLs
-  const createImagesNode = async (codigo, imageUrls) => {
-    const imagesNode = {};
-    imageUrls.forEach((url) => {
-      const imageRef = push(
-        ref(database, `GE/Exterior/Prod/${codigo}/imagenes`)
-      );
-      imagesNode[imageRef.key] = {
-        Codigo: imageRef.key, // Store the push ID as Codigo
-        Imagen: url, // Store the image URL
-      };
-    });
-    return imagesNode;
+    const principal = imageUrls[0];
+    // const real = imageUrls[imageUrls.length - 2];
+    // const paquete = imageUrls[imageUrls.length - 1];
+
+    // Todas las demás imágenes excluyendo principal, real y paquete
+    const extraImages = imageUrls.slice(1);
+
+    return { principal, extraImages };
   };
 
-  // Create the 'colores' node with selected colors
-  const createColorsNode = async (codigo) => {
-    const colorsNode = {};
-    chipscolor.forEach((color) => {
-      const colorRef = push(ref(database, `GE/Exterior/Prod/${codigo}/Color`));
-      colorsNode[colorRef.key] = {
-        Codigo: colorRef.key, // Store the push ID as Codigo
-        label: color, // Store the color name
-      };
-    });
+  // Crear subcolección de colores
+  const createColorsNode = async (codigo, chipscolor) => {
+    const colorsNode = [];
+    for (const color of chipscolor) {
+      const colorId = doc(collection(db, `productos/${codigo}/colores`)).id;
+      const colorData = { id: colorId, label: color };
+      colorsNode.push(colorData);
+
+      // Guardar en subcolección
+      await setDoc(
+        doc(db, `productos/${codigo}/colores/${colorId}`),
+        colorData
+      );
+
+      // Guardar en filtros para consultas rápidas
+      // await setDoc(doc(db, `filtros/color/${color}/${codigo}`), { codigo });
+    }
     return colorsNode;
   };
 
-  // Create the 'tamano' node with selected sizes
-  const createSizesNode = async (codigo) => {
-    const sizesNode = {};
-
-    chips.forEach((size) => {
-      const sizeRef = push(ref(database, `GE/Exterior/Prod/${codigo}/Talla`));
-
-      // Get the price for the size from the prices object
-      const price = parseInt(prices[size]) || 0; // Use an empty string if there's no price
-
-      sizesNode[sizeRef.key] = {
-        Codigo: sizeRef.key, // Store the push ID as Codigo
-        label: size, // Store the size name (chip name)
-        precio: price, // Store the price
+  // Crear subcolección de tallas
+  const createSizesNode = async (codigo, chips, prices) => {
+    const sizesNode = [];
+    for (const size of chips) {
+      const sizeId = doc(collection(db, `productos/${codigo}/tallas`)).id;
+      const sizeData = {
+        id: sizeId,
+        label: size,
+        precio: parseInt(prices[size]) || 0,
       };
-    });
+      sizesNode.push(sizeData);
 
+      // Guardar en subcolección
+      await setDoc(doc(db, `productos/${codigo}/tallas/${sizeId}`), sizeData);
+
+      // Guardar en filtros para consultas rápidas
+      // await setDoc(doc(db, `filtros/talla/${size}/${codigo}`), { codigo });
+    }
     return sizesNode;
   };
 
+  // Subir imágenes extras a subcolección
+  const uploadExtraImages = async (codigo, extraImages) => {
+    for (const url of extraImages) {
+      const imgId = doc(collection(db, `productos/${codigo}/imagenesExtra`)).id;
+      await setDoc(doc(db, `productos/${codigo}/imagenesExtra/${imgId}`), {
+        id: imgId,
+        url,
+      });
+    }
+  };
+
+  // Función principal para manejar el submit
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      // Validación mínima de imágenes
+      if (images.length < 3) {
+        throw new Error(
+          "Cuidado!!!, Se necesitan al menos 3 imágenes para continuar."
+        );
+      }
+      if (!selectedCategoria) {
+        throw new Error("Cuidado!!!, no haz seleccionado la subcategorias");
+      }
+
+      // Validación de peso
+      if (!selectedPeso) {
+        throw new Error("Cuidado!!!, no haz seleccionado un peso.");
+      }
+      if (
+        (!chipscolor || chipscolor.length === 0) &&
+        (!chips || chips.length === 0)
+      ) {
+        throw new Error(
+          "Cuidado!!!, debes agregar al menos un color o un estilo para continuar."
+        );
+      }
+      // Crear referencia de producto
+      const newItemRef = doc(collection(db, "productos"));
+      const codigo = newItemRef.id;
+
+      // Datos comunes del producto
+      const fecha = getCurrentTimeInMilliseconds();
+      let commonData = await prepareCommonData(codigo, fecha);
+
+      // Subir todas las imágenes a Storage y obtener URLs
+      const imageUrls = await uploadImagesToStorage(images);
+
+      // Separar imágenes
+      const { principal, real, paquete, extraImages } =
+        separateImages(imageUrls);
+
+      // Guardar imágenes especiales en el documento principal
+      commonData.Imagen = principal;
+      // commonData.RealImage = real;
+      // commonData.PaqueteImage = paquete;
+
+      // Guardar producto principal
+      await setDoc(newItemRef, commonData);
+
+      // Guardar imágenes extra en subcolección
+      if (extraImages.length > 0) {
+        await uploadExtraImages(codigo, extraImages);
+      }
+
+      // Guardar colores y tallas
+      if (chipscolor.length > 0) await createColorsNode(codigo, chipscolor);
+      if (chips.length > 0) await createSizesNode(codigo, chips, prices);
+
+      // Reset de estados
+      setLoading(false);
+      setImages([]);
+      setChipscolor([]);
+      setChips([]);
+      setTitle("");
+      setDetails("");
+      setPrice("");
+      console.log(commonData);
+
+      alert("Producto subido correctamente!");
+    } catch (error) {
+      setLoading(false);
+      console.error("Error al subir el producto:", error);
+      alert("ERROR INESPERADO: " + error.message);
+    }
+  };
+
+  //hola mundo cruel
+  console.log("hola mundo cruel");
+
   // Store data in the 'filtros' node
   const storeInFiltrosNode = async (codigo, commonData) => {
-    const filtrosRef = ref(database, `GE/Filtros/Exterior/${categ}/${codigo}`);
+    const filtrosRef = ref(database, `GE/Filtros/Nacional/${categ}/${codigo}`);
     await set(filtrosRef, {
       Categoria: commonData.Categoria,
       Subcategoria: commonData.Subcategoria,
@@ -396,8 +903,9 @@ const Publicar = () => {
     if (chipValue !== selectedChip1) {
       setSelectedChip2(null);
       setSelectedChip1(chipValue);
+      console.log(chipValue);
 
-      fetchData(chipValue);
+      // fetchData(chipValue);
     }
   };
   const handleChipClick2 = (chipValue) => {
@@ -415,268 +923,251 @@ const Publicar = () => {
   const handlePriceChanges = (e, chipName) => {
     setPrices({ ...prices, [chipName]: e.target.value });
   };
-  const handleDownloadAndLoad = async () => {
-    try {
-      const response = await fetch(
-        "https://m.media-amazon.com/images/I/51eVrRhcpWL._AC_SY395_.jpg"
-      );
-
-      if (!response.ok) {
-        throw new Error("Network response was not ok");
-      }
-
-      const blob = await response.blob(); // Convert response to a Blob
-      const url = URL.createObjectURL(blob); // Create a temporary URL for the Blob
-
-      // Add the URL to the state (load it into imgs)
-      setimgs(url);
-      console.log(url);
-
-      // Optionally download the image
-      // up (Optional: revokeObjectURL after ensuring it's no longer needed)
-      // URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error("Error downloading or loading the image:", error);
-    }
-  };
-
-  const handleButtonClick = async (view) => {
-    // handleDownloadAndLoad();
-
-    setShowBox(false);
-    setView(view);
-    // Perform any additional actions based on the selected view
-    console.log(`Selected view: Exterior`);
-  };
-  const chipOptions1 = [
-    { label: "Aerea", value: "Aerea" },
-    { label: "Maritima", value: "Maritima" },
-  ];
-
-  useEffect(() => {
-    if (view !== "") {
-      async function getUniqueSubcategories() {
-        const databaseRef = ref(
-          database,
-          `GE/Filtros/Exterior/Belleza & Accesorios`
-        );
-        const subcategoriesSet = new Set();
-
-        try {
-          const snapshot = await get(databaseRef);
-          if (snapshot.exists()) {
-            const products = snapshot.val();
-            for (const productId in products) {
-              if (products.hasOwnProperty(productId)) {
-                const product = products[productId];
-                if (product.Subcategoria) {
-                  subcategoriesSet.add(product.Subcategoria);
-                }
-              }
-            }
-          } else {
-            console.log("No data available");
-          }
-        } catch (error) {
-          console.error("Error fetching data:", error);
-        }
-
-        return Array.from(subcategoriesSet);
-      }
-      const fetchDatas = async (codigo, estado) => {
-        try {
-          // Include estado as a parameter in the request
-          const response = await axios.get(
-            `http://localhost:3000/fetchWithPagination`,
-            {
-              params: {
-                path: `GE/Categorias/Exterior`,
-              },
-            }
-          );
-
-          console.log("Response status:", response.status);
-          console.log("Response data:", response.data);
-
-          const fetchedData = response.data; // Get data from response
-
-          // Update state with the new data
-          setchipOptions(fetchedData);
-        } catch (error) {
-          console.error("Error fetching data:", error);
-          if (error.response) {
-            console.error("Error response data:", error.response.data);
-            console.error("Error response status:", error.response.status);
-          }
-        }
-      };
-
-      // fetchDatas();
-    }
-    // Cleanup function to unsubscribe when component unmounts
-    return () => {
-      // Unsubscribe from database
-    };
-  }, [view]);
-  const fetchData = async (selected) => {
-    try {
-      // Include estado as a parameter in the request
-      const response = await axios.get(
-        `http://localhost:3000/fetchWithPagination`,
-        {
-          params: {
-            path: `GE/Secciones/Exterior/${selected}`,
-          },
-        }
-      );
-
-      console.log("Response status:", response.status);
-      console.log("Response data:", response.data);
-
-      const fetchedData = response.data; // Get data from response
-
-      // Update state with the new data
-      setchipOptionscat(fetchedData);
-    } catch (error) {
-      console.error("Error fetching data:", error);
-      if (error.response) {
-        console.error("Error response data:", error.response.data);
-        console.error("Error response status:", error.response.status);
-      }
-    }
-  };
 
   // Función para leer el archivo Excel y convertirlo en JSON
   const [data, setData] = useState([]); // Estado para guardar los datos procesados
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      // Leer el archivo Excel
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        const data = new Uint8Array(event.target.result);
-        const workbook = XLSX.read(data, { type: "array" });
-
-        // Obtener el nombre de la primera hoja
-        const sheetName = workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
-
-        // Convertir la hoja a JSON
-        const jsonData = XLSX.utils.sheet_to_json(sheet);
-
-        // Procesar los datos y descargar las imágenes
-        const processedData = await Promise.all(
-          jsonData.map(async (item) => {
-            let imageUrl = null;
-
-            if (item.url) {
-              try {
-                const response = await fetch(item.url);
-                const blob = await response.blob();
-                imageUrl = URL.createObjectURL(blob); // Crear URL temporal para la imagen
-              } catch (error) {
-                console.error("Error al descargar la imagen:", error);
-              }
-            }
-
-            // Agregar nuevos campos al objeto
-            return {
-              ...item,
-              url: imageUrl || null, // URL de la imagen descargada (o null si falla)
-              vendedor: "Desconocido", // Valor predeterminado
-              compras: Math.floor(Math.random() * 100), // Número aleatorio como ejemplo
-            };
-          })
-        );
-
-        // Actualizar el estado con los datos procesados
-        setData(processedData);
-      };
-      reader.readAsArrayBuffer(file);
-    } else {
-      alert("Por favor, selecciona un archivo primero");
-    }
-  };
-
   return (
-    <Box>
-      <Cabezal texto={"Publicar Prod"} />
-      <input type="file" accept=".xlsx,.xls" onChange={handleFileChange} />
-      {showbox && (
-        <Box sx={{ display: "flex", gap: 5, m: 10 }}>
-          <Button
-            variant="contained"
-            onClick={() => handleButtonClick("Nacional")}
-          >
-            Nacional
-          </Button>
-          <Button
-            variant="contained"
-            onClick={() => handleButtonClick("Exterior")}
-          >
-            Exterior
-          </Button>
+    <>
+      {loading && (
+        <Box
+          sx={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            bgcolor: "rgba(0,0,0,0.4)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 9999,
+          }}
+        >
+          <CircularProgress size={60} color="primary" />
         </Box>
       )}
+      <Box
+        sx={{
+          paddingTop: { xs: 10, sm: 20 }, // para que no quede pegado arriba
+        }}
+      >
+        <Cabezal texto={"Publicar Prod"} />
+        <Grid item xs={12}>
+          <Typography variant="subtitle1" gutterBottom>
+            Minimo 4 Imagenes (Max 9)
+          </Typography>
 
-      {view !== "" && (
+          <input
+            accept="image/*"
+            id="upload-images"
+            multiple
+            type="file"
+            style={{ display: "none" }}
+            onChange={handleImageUpload}
+          />
+
+          <label htmlFor="upload-images">
+            <IconButton color="primary" component="span">
+              <AddAPhotoIcon />
+            </IconButton>
+          </label>
+
+          <Box sx={{ mt: 2, display: "flex", flexWrap: "wrap", gap: 2 }}>
+            {images.map((file, index) => {
+              const isLast = index === images.length - 1;
+              const isSecondLast = index === images.length - 2;
+
+              return (
+                <Box key={index}>
+                  {/* {(isSecondLast || isLast) && (
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontWeight: "bold",
+                      color: isSecondLast ? "#1976d2" : "#d32f2f",
+                      mb: 0.5,
+                    }}
+                  >
+                    {isSecondLast
+                      ? "Imagen Real (Penúltima)"
+                      : "Imagen Paquete (Última)"}
+                  </Typography>
+                )} */}
+
+                  <ImagePreview
+                    file={file}
+                    sx={{ border: isLast ? "2px solid red" : "none" }}
+                    onRemove={() => handleRemoveImage(index)}
+                    index={index}
+                  />
+                </Box>
+              );
+            })}
+          </Box>
+        </Grid>
         <Box
           component="form"
           onSubmit={handleSubmit}
           sx={{ padding: 2, paddingTop: 8 }}
         >
-          {view === "Exterior" && (
-            <div style={{ margin: 10 }}>
-              {chipOptions1.map((option) => (
+          <div
+            style={{
+              width: "100%",
+              margin: 10,
+              padding: 20,
+              border: "2px solid #ccc",
+              borderRadius: 10,
+              position: "relative",
+              boxSizing: "border-box",
+              backgroundColor: "#fff",
+            }}
+          >
+            <span
+              style={{
+                position: "absolute",
+                top: -12,
+                left: 20,
+                backgroundColor: "#fff",
+                padding: "0 8px",
+                fontSize: 16,
+                fontWeight: "bold",
+                color: "#333",
+              }}
+            >
+              Subcategorias
+            </span>
+
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                justifyContent: "center",
+                width: "100%",
+              }}
+            >
+              {subCategorias.map((option) => (
                 <Chip
-                  key={option.value}
-                  label={option.label}
-                  style={{ margin: 3 }}
+                  key={option.nombre}
+                  label={`${option.nombre} Estimacion: ${option.estimacion.min} - ${option.estimacion.max} Kg`}
+                  style={{ margin: 5 }}
                   clickable
-                  onClick={() => handleChipClick(option.label)}
-                  color={selectedChip === option.label ? "primary" : "default"}
+                  onClick={() => handleChipClickCategoria(option.nombre)}
+                  color={
+                    selectedCategoria === option.nombre ? "primary" : "default"
+                  }
                 />
               ))}
             </div>
+          </div>
+
+          <div
+            style={{
+              width: "100%",
+              margin: 10,
+              padding: 20,
+              border: "2px solid #ccc",
+              borderRadius: 10,
+              position: "relative",
+              boxSizing: "border-box",
+              backgroundColor: "#fff",
+            }}
+          >
+            <span
+              style={{
+                position: "absolute",
+                top: -12,
+                left: 20,
+                backgroundColor: "#fff",
+                padding: "0 8px",
+                fontSize: 16,
+                fontWeight: "bold",
+                color: "#333",
+              }}
+            >
+              Pesos
+            </span>
+
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                justifyContent: "center",
+                width: "100%",
+              }}
+            >
+              {pesos.map((option) => (
+                <Chip
+                  key={option.nombre}
+                  label={`min ${option.min} - max ${option.max} Kg`}
+                  style={{ margin: 5 }}
+                  clickable
+                  onClick={() => handleChipClickPeso(option.nombre)}
+                  color={selectedPeso === option.nombre ? "primary" : "default"}
+                />
+              ))}
+            </div>
+          </div>
+          {["Pesado", "Muy pesado", "Extremadamente pesado"].includes(
+            selectedPeso
+          ) && (
+            <div
+              style={{
+                width: "100%",
+                margin: 10,
+                padding: 20,
+                border: "2px solid #ccc",
+                borderRadius: 10,
+                position: "relative",
+                boxSizing: "border-box",
+                backgroundColor: "#fff",
+              }}
+            >
+              <span
+                style={{
+                  position: "absolute",
+                  top: -12,
+                  left: 20,
+                  backgroundColor: "#fff",
+                  padding: "0 8px",
+                  fontSize: 16,
+                  fontWeight: "bold",
+                  color: "#333",
+                }}
+              >
+                Dimensiones
+              </span>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  justifyContent: "center",
+                  width: "100%",
+                }}
+              >
+                {dimensiones.map((option) => (
+                  <Chip
+                    key={option.nombre}
+                    label={`min ${option.min} - max ${option.max} cm³`}
+                    style={{ margin: 5 }}
+                    clickable
+                    onClick={() => handleChipClickDimension(option.nombre)}
+                    color={
+                      selectedDimension === option.nombre
+                        ? "primary"
+                        : "default"
+                    }
+                  />
+                ))}
+              </div>
+            </div>
           )}
-          {chipOptions.length > 0 && <Typography>Categorias</Typography>}
-          <div style={{ margin: 10 }}>
-            {chipOptions.map((option) => (
-              <Chip
-                key={option.icono}
-                label={option.seccion}
-                style={{ margin: 3 }}
-                clickable
-                onClick={() => handleChipClick1(option.seccion)}
-                color={selectedChip1 === option.seccion ? "primary" : "default"}
-              />
-            ))}
-          </div>
-
-          {chipOptionscat.length > 0 && <Typography>SubCategorias</Typography>}
-          <p>
-            {pesin}
-            {categ}
-          </p>
-
-          <div style={{ margin: 10 }}>
-            {chipOptionscat.map((option) => (
-              <Chip
-                key={option.icono}
-                label={option.seccion}
-                style={{ margin: 3 }}
-                clickable
-                onClick={() => handleChipClick2(option.seccion)}
-                color={selectedChip2 === option.seccion ? "primary" : "default"}
-              />
-            ))}
-          </div>
 
           <Grid container spacing={2}>
             <Grid item xs={12}>
               <TextField
-                label="Title"
+                label="Titulo"
                 variant="outlined"
                 value={title}
                 onChange={handleTitleChange}
@@ -687,45 +1178,27 @@ const Publicar = () => {
 
             <Grid item xs={12}>
               <TextField
-                label="Price"
+                label="Precio"
                 variant="outlined"
                 type="number"
                 value={price}
                 onChange={handlePriceChange}
                 required
                 fullWidth
+                sx={{
+                  "& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button":
+                    {
+                      WebkitAppearance: "none",
+                      margin: 0,
+                    },
+                  "& input[type=number]": {
+                    MozAppearance: "textfield",
+                  },
+                }}
               />
             </Grid>
 
-            {/* {view === "Nacional" || selectedChip === "Aerea" ? (
-              <Grid item xs={12}>
-                <TextField
-                  label={`Introduzca los Kg`}
-                  variant="outlined"
-                  type="number"
-                  value={dimension}
-                  onChange={handleDimension}
-                  required
-                  fullWidth
-                />
-              </Grid>
-            ) : null}
-
-            {view !== "Nacional" && (
-              <Grid item xs={12}>
-                <TextField
-                  label={`Introduzca los Cm3`}
-                  variant="outlined"
-                  type="number"
-                  value={espacio}
-                  onChange={handleEspacio}
-                  required
-                  fullWidth
-                />
-              </Grid>
-            )} */}
-            {/* 
-            {view === "Nacional" && (
+            {country !== "China" && (
               <Grid item xs={12}>
                 <TextField
                   label={`Cantidad en Stock `}
@@ -734,105 +1207,78 @@ const Publicar = () => {
                   value={cantidad}
                   onChange={handleCantidad}
                   required
-                  type="number"
                   fullWidth
                 />
               </Grid>
-            )} */}
+            )}
             <Grid item xs={12}>
               <TextField
-                label="Details"
+                label="Detalles"
                 variant="outlined"
                 multiline
                 rows={4}
                 value={details}
                 onChange={handleDetailsChange}
-                required
                 fullWidth
               />
             </Grid>
-            <div style={{ margin: 10 }}>
-              <Input
-                value={inputValue}
-                onChange={handleInputChange}
-                onKeyDown={handleAddChip}
-                placeholder="Introduzca Color"
-              />
-              {chipscolor.map((chip, index) => (
-                <Chip
-                  key={index}
-                  label={chip}
-                  style={{ margin: 3 }}
-                  onDelete={() => handleDeleteChip(chip)}
+            <Grid item xs={12}>
+              <div style={{ margin: 10 }}>
+                <Input
+                  value={inputValue}
+                  onChange={handleInputChange}
+                  onKeyDown={handleAddChip}
+                  placeholder="Introduzca Color"
                 />
-              ))}
-            </div>
-            <div style={{ margin: 10 }}>
-              <Input
-                value={inputValues}
-                onChange={handleInputChangeStilo}
-                onKeyDown={handleAddChips}
-                placeholder="Introduzca Estilo"
-              />
-              {chips.map((chip, index) => (
-                <Box key={index} display="flex" alignItems="center" marginY={1}>
+                {chipscolor.map((chip, index) => (
                   <Chip
+                    key={index}
                     label={chip}
                     style={{ margin: 3 }}
-                    onDelete={() => handleDeleteChips(chip)}
-                  />
-                  <TextField
-                    label="Price"
-                    type="number"
-                    value={prices[chip] || ""}
-                    onChange={(e) => handlePriceChanges(e, chip)}
-                    style={{ marginLeft: "8px" }}
-                  />
-                </Box>
-              ))}
-            </div>
-            <img
-              src={imgs}
-              alt="Image"
-              style={{
-                width: "100%",
-                height: "50%",
-                objectFit: "contain",
-                backgroundColor: "red",
-              }}
-            />
-
-            <Grid item xs={12}>
-              <Typography variant="subtitle1" gutterBottom>
-                Images (up to 5)
-              </Typography>
-              <Input
-                type="file"
-                multiple
-                accept="image/*"
-                onChange={handleImageUpload}
-                required
-                startAdornment={
-                  <IconButton
-                    color="primary"
-                    aria-label="upload pictures"
-                    component="label"
-                  >
-                    <AddAPhotoIcon />
-                  </IconButton>
-                }
-              />
-              <Box sx={{ mt: 2, display: "flex", flexWrap: "wrap", gap: 2 }}>
-                {images.map((file, index) => (
-                  <ImagePreview
-                    key={index}
-                    file={file}
-                    onRemove={() => handleRemoveImage(index)}
-                    index={index}
+                    onDelete={() => handleDeleteChip(chip)}
                   />
                 ))}
-              </Box>
+              </div>
+              <div style={{ margin: 10 }}>
+                <Input
+                  value={inputValues}
+                  onChange={handleInputChangeStilo}
+                  onKeyDown={handleAddChips}
+                  placeholder="Introduzca Estilo"
+                />
+                {chips.map((chip, index) => (
+                  <Box
+                    key={index}
+                    display="flex"
+                    alignItems="center"
+                    marginY={1}
+                  >
+                    <Chip
+                      label={chip}
+                      style={{ margin: 3 }}
+                      onDelete={() => handleDeleteChips(chip)}
+                    />
+                    <TextField
+                      label="Price"
+                      type="number"
+                      value={prices[chip] || ""}
+                      onChange={(e) => handlePriceChanges(e, chip)}
+                      sx={{
+                        "& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button":
+                          {
+                            WebkitAppearance: "none",
+                            margin: 0,
+                          },
+                        "& input[type=number]": {
+                          MozAppearance: "textfield",
+                        },
+                      }}
+                    />
+                  </Box>
+                ))}
+              </div>
             </Grid>
+
             <Grid
               item
               xs={12}
@@ -841,17 +1287,13 @@ const Publicar = () => {
               alignItems="center"
             >
               <Button type="submit" variant="contained" color="primary">
-                {loading ? (
-                  <CircularProgress color="warning" size={24} />
-                ) : (
-                  "PUBLICAR"
-                )}
+                PUBLICAR PRODUCTO
               </Button>
             </Grid>
           </Grid>
         </Box>
-      )}
-    </Box>
+      </Box>
+    </>
   );
 };
 
