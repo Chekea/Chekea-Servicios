@@ -23,7 +23,7 @@ import {
 import { useNavigate } from "react-router";
 import Cabezal from "./componentes/Cabezal";
 
-import { app } from "../Servicios/firebases";
+import app from "../Servicios/firebases";
 import { compressImage } from "../ayuda";
 
 import {
@@ -61,6 +61,7 @@ const ProductoTodo = () => {
   const handleCloseDrawer = () => {
     setDrawerOpen(false);
   };
+  // hola
 
   async function maisaprod(
     searchName,
@@ -102,6 +103,7 @@ const ProductoTodo = () => {
     }
   }
 
+  // hola maysa
   async function buscarProductos(
     searchName,
     selectedCategory,

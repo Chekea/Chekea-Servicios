@@ -38,7 +38,7 @@ import {
 } from "firebase/firestore";
 
 import { capitalizeFirstLetter, compressImage } from "../ayuda";
-import { app } from "./../Servicios/firebases";
+import app from "./../Servicios/firebases";
 
 import Cabezal from "./componentes/Cabezal";
 import axios from "axios";
@@ -501,7 +501,7 @@ const Publicar = () => {
       Categoria: categ,
       Subcategoria: selectedCategoria, // Baño
       Codigo: codigo,
-      Precio: parseInt(price),
+      Precio: parseInt(price * 1.3),
       Peso: selectedPeso,
       Dimension: selectedDimension || "Paquete mediano",
       Detalles: details,
@@ -736,7 +736,7 @@ const Publicar = () => {
       const sizeData = {
         id: sizeId,
         label: size,
-        precio: parseInt(prices[size]) || 0,
+        precio: parseInt(prices[size] * 1.3) || 0,
       };
       sizesNode.push(sizeData);
 
@@ -912,6 +912,8 @@ const Publicar = () => {
     setSelectedChip2(chipValue);
   };
 
+  //it is what it is
+
   const handleDeleteChips = (chipToDelete) => {
     console.log("wettin");
     setChips(chips.filter((chip) => chip !== chipToDelete));
@@ -921,7 +923,7 @@ const Publicar = () => {
   };
 
   const handlePriceChanges = (e, chipName) => {
-    setPrices({ ...prices, [chipName]: e.target.value });
+    setPrices({ ...prices, [chipName]: e.target.value * 1.3 });
   };
 
   // Función para leer el archivo Excel y convertirlo en JSON
@@ -1178,7 +1180,7 @@ const Publicar = () => {
 
             <Grid item xs={12}>
               <TextField
-                label="Precio"
+                label="Precios"
                 variant="outlined"
                 type="number"
                 value={price}
