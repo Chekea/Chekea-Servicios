@@ -130,8 +130,8 @@ const Publicar = () => {
 
   const pesos = [
     { nombre: "Ultraligero", min: 0.1, max: 0.5 },
-    { nombre: "Ligero", min: 0.51, max: 1.0 },
-    { nombre: "Medio", min: 1.1, max: 2.0 },
+    { nombre: "Ligero", min: 0.51, max: 1.1 },
+    { nombre: "Medio", min: 1.2, max: 2.0 },
     { nombre: "Pesado", min: 2.01, max: 3.5 },
     { nombre: "Muy pesado", min: 3.51, max: 4.5 },
     { nombre: "Extremadamente pesado", min: 4.51, max: 6.0 },
@@ -737,6 +737,8 @@ const Publicar = () => {
     }
     return colorsNode;
   };
+
+  console.log("HOALA MUDNO CRUEL");
 
   // Crear subcolección de tallas
   const createSizesNode = async (codigo, chips, prices) => {
