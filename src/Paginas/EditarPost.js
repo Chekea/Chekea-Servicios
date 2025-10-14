@@ -4,6 +4,7 @@ import {
   IconButton,
   Chip,
   Input,
+  Drawer,
   TextField,
   Typography,
   Button,
@@ -18,7 +19,7 @@ import {
   DialogActions,
   useMediaQuery,
 } from "@mui/material";
-import AddAPhotoIcon from "@mui/icons-material/AddAPhoto";
+import AddIcon from "@mui/icons-material/Add";
 import {
   get,
   ref,
@@ -34,6 +35,14 @@ import {
 } from "firebase/database";
 import { getStorage, ref as storageRef, deleteObject } from "firebase/storage";
 import { getAuth } from "firebase/auth";
+import {
+  doc,
+  collection,
+  getDocs,
+  onSnapshot,
+  getFirestore,
+  getDoc,
+} from "firebase/firestore";
 
 import app from "./../Servicios/firebases";
 import { useNavigate, useParams } from "react-router";
@@ -113,7 +122,76 @@ const EditarPost = () => {
   const [open, setOpen] = useState(false);
   const [tovalue, setToValue] = useState(false);
   const [todelete, setToDelete] = useState("");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerType, setDrawerType] = useState("color"); // "color" o "talla"
+  const [dataChip, setDataChip] = useState(null); // chip que estamos editando
+  const [newColor, setNewColor] = useState(""); // título del chip
+  const [newPrice, setNewPrice] = useState(""); // precio (solo para talla)
+
   const navigate = useNavigate();
+  const db = getFirestore(app);
+
+  const handleDrawerOpen = (type, chip = null) => {
+    setDrawerType(type);
+    setDataChip(chip);
+
+    if (chip) {
+      // si es un chip de tipo "talla" con precio
+      if (type === "talla") {
+        setNewColor(chip.label ?? "");
+        setNewPrice(chip.price ?? 0);
+      } else {
+        setNewColor(chip.label ?? "");
+        setNewPrice("");
+      }
+    } else {
+      // si vamos a agregar un chip nuevo
+      setNewColor("");
+      setNewPrice("");
+    }
+
+    setDrawerOpen(true);
+  };
+
+  const handleDrawerClose = () => setDrawerOpen(false);
+
+  const handleSaveNew = () => {
+    if (!newColor) return;
+
+    if (drawerType === "color") {
+      if (dataChip) {
+        // editar color existente
+        setChipscolor((prev) =>
+          prev.map((c) => (c === dataChip ? { label: newColor } : c))
+        );
+      } else {
+        // agregar nuevo color
+        setChipscolor((prev) => [...prev, { label: newColor }]);
+      }
+    } else {
+      const chipObj = { label: newColor, price: newPrice || 0 };
+      if (dataChip) {
+        // editar talla existente
+        setChips((prev) =>
+          prev.map((c) =>
+            c.id === dataChip.id
+              ? { ...c, label: newColor, precio: newPrice }
+              : c
+          )
+        );
+      } else {
+        // agregar nueva talla
+        setChips((prev) => [...prev, chipObj]);
+      }
+    }
+
+    // limpiar estados y cerrar Drawer
+    setDataChip(null);
+    setNewColor("");
+    setNewPrice("");
+    setDrawerOpen(false);
+  };
+
   console.log(codigo);
   const [number, setNumber] = useState(null);
   const handleOpenAlert = () => {
@@ -208,73 +286,6 @@ const EditarPost = () => {
       console.error("Error updating data: ", error);
     }
   };
-  const quitardelsistema = async () => {
-    const dbRef = ref(database, `GE/Otros/${codigo}`);
-    const storage = getStorage(app);
-
-    try {
-      const snapshot = await get(dbRef);
-      if (snapshot.exists()) {
-        const childSnaps = snapshot.val();
-
-        for (const key in childSnaps) {
-          const dict = childSnaps[key];
-          const imagen = dict.Imagen;
-
-          if (imagen) {
-            const imageRef = storageRef(storage, imagen);
-
-            await deleteObject(imageRef);
-            console.log(`Deleted image: ${imagen}`);
-          }
-        }
-
-        borrarDB();
-      } else {
-        console.log("No data available");
-      }
-    } catch (error) {
-      console.error("Error: ", error);
-    }
-  };
-  const borrarDB = async () => {
-    try {
-      const refBase = ref(database, "GE");
-
-      // Remove nodes from the database
-      await remove(ref(refBase, `Otros/${codigo}`));
-      await remove(ref(refBase, `Detalles/${codigo}`));
-      // await remove(ref(refBase, `Prod/${userId}/${codigo}`));
-
-      if (data.Categoria !== "Moda & Accesorios") {
-        await remove(
-          ref(
-            refBase,
-            `Filtros/${lugar(data.Pais)}/${data.Categoria}/${codigo}`
-          )
-        );
-      } else {
-        await remove(
-          ref(
-            refBase,
-            `Filtros/${lugar(data.Pais)}/${data.Categoria}/${
-              data.Genero
-            }/${codigo}`
-          )
-        );
-      }
-
-      await remove(ref(refBase, `${lugar(data.Pais)}/Prod/${codigo}`));
-
-      console.log("Data removed successfully");
-
-      // Handle post-removal actions (e.g., navigation, UI updates)
-      // For example, if using React Router:
-      // navigate("/some-route");
-    } catch (error) {
-      console.error("Error removing data: ", error);
-    }
-  };
 
   //nuevo arriba
   const handleInputChange = (e) => setInputValue(e.target.value);
@@ -351,48 +362,59 @@ const EditarPost = () => {
   ];
 
   useEffect(() => {
-    const fetchData = () => {
-      let colores = [];
-      let talles = [];
+    const fetchData = async (codigo) => {
+      try {
+        // 1) Referencia al documento producto
+        const productRef = doc(db, "productos", codigo);
 
-      const databaseRef = ref(database, `GE/${contexto}/Prod/${codigo}`);
-      onValue(databaseRef, (snapshot) => {
-        let snap = snapshot.val();
-        setData(snap);
+        // 2) Leer el documento (getDoc)
+        const docSnap = await getDoc(productRef);
 
-        setTitle(snap.Titulo);
-        setUbicacion(snap.Ubicacion);
-        setPrice(snap.Precio);
-        setDimension(snap.Dimension);
-        setEspacio(snap.Espacio);
-
-        setDetails(snap.Detalles);
-        setCantidad(snap.Cantidad);
-        setStock(snap.Stock);
-
-        const colors = snap.Color;
-        const tallas = snap.Talla;
-        console.log(colors);
-
-        if (colors) {
-          Object.values(colors).forEach((color) => {
-            colores.push(color.label);
-            console.log(`Color Code: ${color.Codigo}, Label: ${color.label}`);
-          });
-
-          setChipscolor(colores);
+        if (!docSnap.exists()) {
+          console.log("❌ No existe el documento del producto:", codigo);
+          // limpiar estados si hace falta
+          setData(null);
+          setChips([]);
+          setChipscolor([]);
+          return;
         }
 
-        if (tallas) {
-          Object.values(tallas).forEach((talla) => {
-            talles.push(`${talla.label}:${talla.precio}`);
-          });
-          setChips(talles);
-        }
-      });
+        const productData = docSnap.data();
+        setData(productData);
+
+        // actualizar campos principales (comprueba nombres exactos en Firestore)
+        setTitle(productData.Titulo ?? "");
+        setUbicacion(productData.Ubicacion ?? "");
+        setPrice(productData.Precio ?? "");
+        setDetails(productData.Detalles ?? "");
+        setStock(productData.Stock ?? "");
+
+        console.log("Producto Data:", productData);
+
+        // 3) Leer subcolecciones en paralelo (más rápido)
+        const coloresRef = collection(db, "productos", codigo, "colores");
+        const tallasRef = collection(db, "productos", codigo, "tallas");
+
+        const [coloresSnap, tallasSnap] = await Promise.all([
+          getDocs(coloresRef),
+          getDocs(tallasRef),
+        ]);
+
+        // 4) Mapear colores (asegurarse de que label existe)
+        const colores = coloresSnap.docs.map((doc) => doc.data());
+        // 5) Mapear tallas
+        const tallas = tallasSnap.docs.map((doc) => doc.data());
+
+        console.log("Colores:", colores);
+
+        setChipscolor(colores ? colores : []);
+        setChips(tallas ? tallas : []);
+      } catch (error) {
+        console.error("❌ Error al obtener datos:", error);
+      }
     };
 
-    fetchData();
+    fetchData(codigo);
 
     // Cleanup function to unsubscribe when component unmounts
     return () => {
@@ -474,78 +496,6 @@ const EditarPost = () => {
     }
   };
 
-  const addToDbnow = async () => {
-    const data = {
-      "Belleza & Accesorios": {
-        "-NS9e64QfGc99Jc_Fkk7": { seccion: "Maquillaje" },
-        "-NS9e64QfGc99Jc_Fkk8": { seccion: "Pelos" },
-        "-NS9e64Rf7JA8mBOn6wG": { seccion: "Bisuteria" },
-        "-NS9e64Rf7JA8mBOn6wH": { seccion: "Perfumes" },
-        "-NS9e64Xcctl8nVsuKWu": { seccion: "Otros" },
-      },
-      "Complementos para Peques": {
-        "-NS9g6RRvtqI5WH4WTwZ": { seccion: "Recien nacidos" },
-        "-NS9g6RRvtqI5WH4WTw_": { seccion: "Juguetes" },
-        "-NS9g6RSV3bd_CVbQKVX": { seccion: "Moda" },
-        "-NS9g6RSV3bd_CVbQKVZ": { seccion: "Otros" },
-      },
-      Deporte: {
-        "-NSA1cIhfPCDV428idqX": { seccion: "Gymnasio" },
-        "-NSA1cIse-IvQWXtOMCS": { seccion: "Futbol" },
-        "-NSA1cIvpLdJk99TENHy": { seccion: "Baloncesto" },
-        "-NSA1cIvpLdJk99TENHz": { seccion: "Tenis" },
-        "-NSA1cIxzqZMWSaRb8c4": { seccion: "Prenda masculina" },
-        "-NSA1cIyv4fSfOphbY0-": { seccion: "Prenda femenina" },
-        "-NSA1cJCdzd0-qrSBPL9": { seccion: "Otros" },
-      },
-      Electronica: {
-        "-NS9eo9TVJunJzlqSZri": { seccion: "Tv & Ordenadores" },
-        "-NS9eo9TVJunJzlqSZrj": { seccion: "Telefonos & Auriculares" },
-        "-NS9eo9UtRvCVpd0MS1b": { seccion: "Aparatos de Musica" },
-        "-NS9eo9UtRvCVpd0MS1c": { seccion: "Maquinaria" },
-        "-NS9eo9VFHxNOLK0Kpsr": { seccion: "Otros" },
-      },
-      Hogar: {
-        "-NS9faIl2NgTsbRUEg20": { seccion: "Salon" },
-        "-NS9faIuMz9oDRMgouLq": { seccion: "Cocina" },
-        "-NS9faIuMz9oDRMgouLr": { seccion: "Baño" },
-        "-NS9faIvgsBdN5BjYynG": { seccion: "Terraza" },
-        "-NS9faIwU5xxurCuBpio": { seccion: "Otros" },
-      },
-      "Moda & Accesorios": {
-        Femenina: {
-          "-NS9t9xNIarWxv36Wxjo": { seccion: "Calzado" },
-          "-NS9t9xUPusKEWyd-KnH": { seccion: "Faldas" },
-          "-NS9t9xVwOKeJVgS5ce2": { seccion: "Pantalones" },
-          "-NS9t9xXg3D8VsniJzoc": { seccion: "Trajes" },
-          "-NS9t9xYiJDWbtfFYSZ2": { seccion: "Vestidos" },
-          "-NS9t9xYiJDWbtfFYSZ3": { seccion: "Camisas" },
-          "-NS9t9xYiJDWbtfFYSZ4": { seccion: "Otros" },
-          "-NjpV80g8iSHWmx7yaoq": { seccion: "Bolsos" },
-        },
-        Masculina: {
-          "-NS9tUQe3_k2UXHRRGaQ": { seccion: "Calzado" },
-          "-NS9tUQe3_k2UXHRRGaR": { seccion: "Camisas" },
-          "-NS9tUQf57FIQ_xdx_9O": { seccion: "Pantalones" },
-          "-NS9tUQf57FIQ_xdx_9P": { seccion: "Trajes" },
-          "-NS9tUQf57FIQ_xdx_9Q": { seccion: "Relojes" },
-          "-NS9tUQgBCuZ3J-jHSXG": { seccion: "Sombreros" },
-          "-NS9tUQgBCuZ3J-jHSXH": { seccion: "Otros" },
-        },
-      },
-    };
-
-    // Reference to your database path
-    const dbRef = ref(database, `GE/Secciones/Nacional`);
-    const databaseRef2 = ref(database, `GE/Secciones/Exterior`);
-
-    // try {
-    // //   // Update the node
-    // Set the data
-    await update(dbRef, data);
-    await update(databaseRef2, data);
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     // setLoading(true); // Start loading
@@ -595,6 +545,10 @@ const EditarPost = () => {
     console.log(updatedObject.Categoria, data);
   };
 
+  const handleEdit = () => {
+    console.log("wetiin");
+  };
+
   return (
     <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2, padding: 2 }}>
       <Cabezal texto={"Editar"} />
@@ -609,15 +563,55 @@ const EditarPost = () => {
         <Button variant="contained" color="info" onClick={handleOpenAlert}>
           APLICAR DESCUENTO
         </Button>
-        <Button
-          variant="contained"
-          color="error"
-          style={{ marginLeft: 25 }}
-          onClick={quitardelsistema}
-        >
-          ELIMINAR PRODUCTOR
-        </Button>
       </div>
+
+      <div style={{ margin: 10 }}>
+        <Typography variant="subtitle1" gutterBottom>
+          Colores
+        </Typography>
+        {chipscolor.map((chip, index) => (
+          <Chip
+            key={index}
+            label={chip.label}
+            style={{ margin: 3 }}
+            onClick={() => handleDrawerOpen("color", chip)}
+            onDelete={() => handleDeleteChip(chip)}
+          />
+        ))}
+        <IconButton color="primary" onClick={() => handleDrawerOpen("color")}>
+          <AddIcon />
+        </IconButton>
+      </div>
+      <div style={{ margin: 10 }}>
+        <Typography variant="subtitle1" gutterBottom>
+          Tallas
+        </Typography>
+        {chips.map((chip, index) => (
+          <Chip
+            label={`${chip.label} : $${chip.precio}`}
+            style={{ margin: 3 }}
+            onClick={() => handleDrawerOpen("talla", chip)}
+            onDelete={() => handleDeleteChips(chip)}
+          />
+        ))}
+        <IconButton color="primary" onClick={() => handleDrawerOpen("talla")}>
+          <AddIcon />
+        </IconButton>
+      </div>
+      {chipsnew.map((chip, index) => (
+        <Box
+          key={index}
+          display="flex"
+          alignItems="center"
+          marginY={isMobile ? 1 : 5}
+        >
+          <Chip
+            label={chip}
+            style={{ margin: 3 }}
+            onDelete={() => handleDeleteChips2(chip)}
+          />
+        </Box>
+      ))}
 
       <Grid container spacing={2} marginTop={isMobile ? 5 : 0}>
         <Grid item xs={12}>
@@ -630,16 +624,7 @@ const EditarPost = () => {
             fullWidth
           />
         </Grid>
-        <Grid item xs={12}>
-          <TextField
-            label="Ubicacion"
-            variant="outlined"
-            value={ubicacion}
-            onChange={handleUbicacion}
-            required
-            fullWidth
-          />
-        </Grid>
+
         <Grid item xs={12}>
           <TextField
             label="Price"
@@ -671,30 +656,6 @@ const EditarPost = () => {
           </Box>
         )}
 
-        {contexto === "Exterior" && (
-          <Grid item xs={12}>
-            <TextField
-              label={`Introduzca los Cm3`}
-              variant="outlined"
-              type="number"
-              value={espacio}
-              onChange={handleEspacio}
-              fullWidth
-            />
-          </Grid>
-        )}
-
-        <Grid item xs={12}>
-          <TextField
-            label={`Introduzca los Kg`}
-            variant="outlined"
-            type="number"
-            value={dimension}
-            onChange={handleDimension}
-            fullWidth
-          />
-        </Grid>
-
         <Grid item xs={12}>
           <TextField
             label="Details"
@@ -707,59 +668,6 @@ const EditarPost = () => {
             fullWidth
           />
         </Grid>
-        <div style={{ margin: 10 }}>
-          <Input
-            value={inputValue}
-            onChange={handleInputChange}
-            onKeyDown={handleAddChip}
-            placeholder="Introduzca Color"
-          />
-          {chipscolor.map((chip, index) => (
-            <Chip
-              key={index}
-              label={chip}
-              style={{ margin: 3 }}
-              onDelete={() => handleDeleteChip(chip)}
-            />
-          ))}
-        </div>
-        <div style={{ margin: 10 }}>
-          <Input
-            value={inputValues}
-            onChange={handleInputChangeStilo}
-            onKeyDown={handleAddChips}
-            placeholder="Introduzca Estilo"
-          />
-          {chips.map((chip, index) => (
-            <Chip
-              label={chip}
-              style={{ margin: 3 }}
-              onDelete={() => handleDeleteChips(chip)}
-            />
-          ))}
-          {chipsnew.length > 0 && <Typography>Nuevos</Typography>}
-        </div>
-        {chipsnew.map((chip, index) => (
-          <Box
-            key={index}
-            display="flex"
-            alignItems="center"
-            marginY={isMobile ? 1 : 5}
-          >
-            <Chip
-              label={chip}
-              style={{ margin: 3 }}
-              onDelete={() => handleDeleteChips2(chip)}
-            />
-            <TextField
-              label="Price"
-              type="number"
-              value={prices[chip] || ""}
-              onChange={(e) => handlePriceChanges(e, chip)}
-              style={{ marginLeft: "8px" }}
-            />
-          </Box>
-        ))}
 
         <div
           style={{
@@ -789,6 +697,44 @@ const EditarPost = () => {
         onClose={handleCloses}
         onConfirm={handleConfirm}
       />
+      <Drawer anchor="right" open={drawerOpen} onClose={handleDrawerClose}>
+        <Box sx={{ width: 300, padding: 2 }}>
+          <Typography variant="h6" gutterBottom>
+            {drawerType === "color" ? "Nuevo Color" : "Nueva Talla"}
+          </Typography>
+
+          {/* Siempre habilitado */}
+          <TextField
+            label={drawerType === "color" ? "Color" : "Talla"}
+            value={newColor}
+            onChange={(e) => setNewColor(e.target.value)}
+            fullWidth
+            margin="normal"
+          />
+
+          {/* Solo habilitado si es tipo con precio */}
+          {drawerType === "talla" && (
+            <TextField
+              label="Precio"
+              type="number"
+              value={newPrice}
+              onChange={(e) => setNewPrice(e.target.value)}
+              fullWidth
+              margin="normal"
+            />
+          )}
+
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleSaveNew}
+            sx={{ mt: 2 }}
+            fullWidth
+          >
+            Guardar
+          </Button>
+        </Box>
+      </Drawer>
     </Box>
   );
 };

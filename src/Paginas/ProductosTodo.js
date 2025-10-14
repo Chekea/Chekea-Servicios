@@ -58,10 +58,11 @@ const ProductoTodo = () => {
   const [productos, setProductos] = useState([]);
   const [selectedLocation, setSelectedLocation] = useState("China");
 
+  console.log("Productos cargados:", products);
   const handleCloseDrawer = () => {
     setDrawerOpen(false);
   };
-  // hola
+  // hola mundo cruel
 
   async function maisaprod(
     searchName,
@@ -420,13 +421,13 @@ const ProductoTodo = () => {
         {`Publicados por Maysa (${products.length})`}
       </Typography>
       <Box sx={{ display: "flex", justifyContent: "center", my: 2 }}>
-        {/* <TextField
+        <TextField
           label="Buscar producto..."
           variant="outlined"
           value={searchName}
           onChange={(e) => setSearchName(e.target.value)}
           sx={{ width: isMobile ? "100%" : "60%" }}
-        /> */}
+        />
 
         <Button
           variant="contained"
@@ -518,6 +519,7 @@ const ProductoTodo = () => {
                         variant="contained"
                         size="small"
                         // onClick={() => HANDLEDETALES(product.Codigo)}
+                        onClick={() => console.log(product)}
                         sx={{ fontWeight: "bold" }}
                       >
                         {product.Stock === 0 ? "Sin Stock" : "VER DETALLES"}
@@ -541,7 +543,7 @@ const ProductoTodo = () => {
               <Box sx={{ display: "flex", justifyContent: "center", my: 4 }}>
                 <Button
                   variant="outlined"
-                  onClick={loadMore}
+                  // onClick={loadMore}
                   disabled={loading}
                   startIcon={loading ? <CircularProgress size={20} /> : null}
                   sx={{ fontWeight: "bold" }}

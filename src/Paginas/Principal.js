@@ -95,11 +95,11 @@ const Principal = ({ email, logout }) => {
         onClose={handleClose}
         onConfirm={handleConfirm}
       />
-      <div style={{ position: "fixed", bottom: 20, right: 25 }}>
+      {/* <div style={{ position: "fixed", bottom: 20, right: 25 }}>
         <button style={{ padding: 15 }} onClick={() => handleOpen()}>
           Cerrar Sesión
         </button>
-      </div>
+      </div> */}
       {filteredItems.map((item, index) => (
         <Grid item xs={6} sm={6} md={4} lg={3} key={index} display="flex">
           <Paper
@@ -124,41 +124,6 @@ const Principal = ({ email, logout }) => {
           </Paper>
         </Grid>
       ))}
-      <div>
-        <ImageUploading
-          multiple={false} // Disable multiple selection for a single image
-          value={images}
-          onChange={onChange}
-          maxNumber={maxNumber}
-          dataURLKey="data_url"
-        >
-          {({ imageList, onImageUpload, onImageUpdate, dragProps }) => (
-            <div className="upload__image-wrapper">
-              <IconButton
-                sx={{ width: "100%", height: "100%" }}
-                onClick={
-                  images.length === 0 ? onImageUpload : () => onImageUpdate(0)
-                }
-                {...dragProps}
-              >
-                {images.length === 0 ? (
-                  <IconButton sx={{ width: "100%", height: "100%" }}>
-                    <PhotoCameraIcon
-                      style={{ fontSize: "150px", color: "#ccc" }}
-                    />
-                  </IconButton>
-                ) : (
-                  <img
-                    src={images[0].data_url}
-                    alt="Selected"
-                    style={{ width: "80%", height: "100%", borderRadius: 8 }}
-                  />
-                )}
-              </IconButton>
-            </div>
-          )}
-        </ImageUploading>
-      </div>
     </Grid>
   );
 };

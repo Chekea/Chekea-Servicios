@@ -123,16 +123,18 @@ const Publicar = () => {
   const [selectedDimension, setSelectedDimension] = useState(null);
   const [selectedCategoria, setSelectedCategoria] = useState(null);
 
+  let MARGEN = 1.3;
+
   let categ = "Moda & Accesorios"; //Categoria
   let country = "China";
 
   const pesos = [
     { nombre: "Ultraligero", min: 0.1, max: 0.5 },
-    { nombre: "Ligero", min: 0.51, max: 1.5 },
-    { nombre: "Medio", min: 1.51, max: 3.0 },
-    { nombre: "Pesado", min: 3.01, max: 4.5 },
-    { nombre: "Muy pesado", min: 4.51, max: 5.5 },
-    { nombre: "Extremadamente pesado", min: 5.51, max: 6.0 },
+    { nombre: "Ligero", min: 0.51, max: 1.0 },
+    { nombre: "Medio", min: 1.1, max: 2.0 },
+    { nombre: "Pesado", min: 2.01, max: 3.5 },
+    { nombre: "Muy pesado", min: 3.51, max: 4.5 },
+    { nombre: "Extremadamente pesado", min: 4.51, max: 6.0 },
   ];
   const subCategorias = [
     { nombre: "Trajes", estimacion: { min: 0.8, max: 1.4 } },
@@ -141,7 +143,14 @@ const Publicar = () => {
     { nombre: "Bolsos", estimacion: { min: 0.3, max: 0.9 } },
     { nombre: "Calzado", estimacion: { min: 0.6, max: 1.2 } },
     { nombre: "Faldas", estimacion: { min: 0.3, max: 0.7 } },
+    { nombre: "Pantalones", estimacion: { min: 0.3, max: 0.7 } },
+    { nombre: "Otros", estimacion: { min: 0.3, max: 0.7 } },
+    { nombre: "Ropa Interior", estimacion: { min: 0.3, max: 0.7 } },
   ];
+
+  // ROPA Y ACCESORIOS
+
+  console.log("eiby bielo");
 
   const dimensiones = [
     { nombre: "Paquete pequeño", min: 0.023, max: 0.03 },
@@ -499,9 +508,10 @@ const Publicar = () => {
       Titulo: title,
       Ttoken: tokens,
       Categoria: categ,
+      Genero: "Femenina",
       Subcategoria: selectedCategoria, // Baño
       Codigo: codigo,
-      Precio: parseInt(price * 1.3),
+      Precio: parseInt(price * MARGEN + 1000),
       Peso: selectedPeso,
       Dimension: selectedDimension || "Paquete mediano",
       Detalles: details,
@@ -736,7 +746,7 @@ const Publicar = () => {
       const sizeData = {
         id: sizeId,
         label: size,
-        precio: parseInt(prices[size] * 1.3) || 0,
+        precio: parseInt(prices[size] * MARGEN + 1000) || 0,
       };
       sizesNode.push(sizeData);
 
@@ -923,7 +933,7 @@ const Publicar = () => {
   };
 
   const handlePriceChanges = (e, chipName) => {
-    setPrices({ ...prices, [chipName]: e.target.value * 1.3 });
+    setPrices({ ...prices, [chipName]: e.target.value });
   };
 
   // Función para leer el archivo Excel y convertirlo en JSON
