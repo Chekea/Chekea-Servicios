@@ -205,7 +205,7 @@ const ProductoTodo = () => {
       setLastDoc(parsed.lastDoc || null);
       setHasMore(parsed.hasMore ?? true);
     } else {
-      buscarProductos();
+      // buscarProductos();
     }
   }, []);
 
