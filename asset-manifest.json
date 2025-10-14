@@ -1,13 +1,13 @@
 {
   "files": {
     "main.css": "/Chekea-Servicios/static/css/main.593ecbda.css",
-    "main.js": "/Chekea-Servicios/static/js/main.d044c39d.js",
+    "main.js": "/Chekea-Servicios/static/js/main.7ecbf2ed.js",
     "static/js/988.0fc5c201.chunk.js": "/Chekea-Servicios/static/js/988.0fc5c201.chunk.js",
     "static/js/655.6f21535a.chunk.js": "/Chekea-Servicios/static/js/655.6f21535a.chunk.js",
     "static/js/499.c22c7a8b.chunk.js": "/Chekea-Servicios/static/js/499.c22c7a8b.chunk.js",
-    "static/js/291.6c101aa0.chunk.js": "/Chekea-Servicios/static/js/291.6c101aa0.chunk.js",
+    "static/js/291.3f4b6f86.chunk.js": "/Chekea-Servicios/static/js/291.3f4b6f86.chunk.js",
     "static/js/821.14baf177.chunk.js": "/Chekea-Servicios/static/js/821.14baf177.chunk.js",
-    "static/js/412.779dabb3.chunk.js": "/Chekea-Servicios/static/js/412.779dabb3.chunk.js",
+    "static/js/412.0736a3ff.chunk.js": "/Chekea-Servicios/static/js/412.0736a3ff.chunk.js",
     "static/js/671.abf97bff.chunk.js": "/Chekea-Servicios/static/js/671.abf97bff.chunk.js",
     "static/js/720.22ce70fb.chunk.js": "/Chekea-Servicios/static/js/720.22ce70fb.chunk.js",
     "static/js/48.f0e6c2f6.chunk.js": "/Chekea-Servicios/static/js/48.f0e6c2f6.chunk.js",
@@ -15,13 +15,13 @@
     "static/js/277.aeb6a8c2.chunk.js": "/Chekea-Servicios/static/js/277.aeb6a8c2.chunk.js",
     "static/js/246.f003a95b.chunk.js": "/Chekea-Servicios/static/js/246.f003a95b.chunk.js",
     "static/js/122.fb92897a.chunk.js": "/Chekea-Servicios/static/js/122.fb92897a.chunk.js",
-    "static/js/513.de9778a5.chunk.js": "/Chekea-Servicios/static/js/513.de9778a5.chunk.js",
+    "static/js/620.484a7ee8.chunk.js": "/Chekea-Servicios/static/js/620.484a7ee8.chunk.js",
     "static/media/Linotte-Regular.ttf": "/Chekea-Servicios/static/media/Linotte-Regular.e6583154eeda6d7b0b48.ttf",
     "static/media/Linotte-SemiBold.ttf": "/Chekea-Servicios/static/media/Linotte-SemiBold.63463789e30b16c728de.ttf",
     "index.html": "/Chekea-Servicios/index.html"
   },
   "entrypoints": [
     "static/css/main.593ecbda.css",
-    "static/js/main.d044c39d.js"
+    "static/js/main.7ecbf2ed.js"
   ]
 }
