@@ -743,12 +743,13 @@ const Publicar = () => {
   // Crear subcolección de tallas
   const createSizesNode = async (codigo, chips, prices) => {
     const sizesNode = [];
+
     for (const size of chips) {
       const sizeId = doc(collection(db, `productos/${codigo}/tallas`)).id;
       const sizeData = {
         id: sizeId,
         label: size,
-        precio: parseInt(prices[size] * MARGEN + 1000) || 0,
+        precio: prices[size] > 0 ? parseInt(prices[size] * MARGEN + 1000) : 0,
       };
       sizesNode.push(sizeData);
 

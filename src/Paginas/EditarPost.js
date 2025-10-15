@@ -42,6 +42,9 @@ import {
   onSnapshot,
   getFirestore,
   getDoc,
+  updateDoc,
+  addDoc,
+  deleteDoc,
 } from "firebase/firestore";
 
 import app from "./../Servicios/firebases";
@@ -155,23 +158,35 @@ const EditarPost = () => {
 
   const handleDrawerClose = () => setDrawerOpen(false);
 
-  const handleSaveNew = () => {
+  const handleSaveNew = async () => {
     if (!newColor) return;
+    const productoRef = doc(db, "productos", codigo);
 
     if (drawerType === "color") {
       if (dataChip) {
-        // editar color existente
         setChipscolor((prev) =>
           prev.map((c) => (c === dataChip ? { label: newColor } : c))
         );
+
+        // Editar color existente
+        const colorRef = doc(collection(productoRef, "colores"), dataChip.id);
+        // await updateDoc(colorRef, { label: newColor });
+        console.log(newColor);
       } else {
-        // agregar nuevo color
-        setChipscolor((prev) => [...prev, { label: newColor }]);
+        const newColorObj = { label: newColor };
+
+        setChipscolor((prev) => [...prev, newColorObj]);
+
+        // Agregar nuevo color
+        // await addDoc(collection(productoRef, "colores"), {
+        //   label: newColor,
+        // });
+
+        console.log(newColor);
       }
     } else {
-      const chipObj = { label: newColor, price: newPrice || 0 };
+      const chipObj = { label: newColor, precio: newPrice || 0 };
       if (dataChip) {
-        // editar talla existente
         setChips((prev) =>
           prev.map((c) =>
             c.id === dataChip.id
@@ -179,9 +194,14 @@ const EditarPost = () => {
               : c
           )
         );
+        const tallaRef = doc(collection(productoRef, "tallas"), dataChip.id);
+        // await updateDoc(tallaRef, chipObj);
+        console.log(chipObj);
       } else {
-        // agregar nueva talla
         setChips((prev) => [...prev, chipObj]);
+
+        // await addDoc(collection(productoRef, "tallas"), chipObj);
+        console.log(chipObj);
       }
     }
 
@@ -205,7 +225,6 @@ const EditarPost = () => {
   const handleConfirmAlert = (value) => {
     setNumber(value);
     ActualizarDescuento(value);
-    console.log("Confirmed value:", value);
   };
   const handleOpen = () => {
     setOpen(true);
@@ -216,7 +235,32 @@ const EditarPost = () => {
   };
 
   const handleConfirm = () => {
-    ValueExistinDb(todelete, tovalue, "Eliminar");
+    try {
+      const isColor = drawerType === "color"; // 👈 Usa el mismo estado global
+      const subcollection = isColor ? "colores" : "tallas";
+
+      console.log(todelete, drawerType);
+
+      if (isColor) {
+        setChipscolor((prev) => prev.filter((chip) => chip.id !== todelete.id));
+      } else {
+        setChips((prev) => prev.filter((chip) => chip.id !== todelete.id));
+      }
+
+      if (!todelete.id) return;
+
+      // const productoRef = doc(db, "productos", codigo);
+      // const chipRef = doc(collection(productoRef, subcollection), chipToDelete.id);
+      // // await deleteDoc(chipRef);
+
+      console.log(
+        `✅ ${isColor ? "Color" : "Talla"} '${
+          todelete.label
+        }' eliminado de Firestore.`
+      );
+    } catch (error) {
+      console.error("❌ Error eliminando chip:", error);
+    }
     handleCloses();
   };
 
@@ -314,13 +358,10 @@ const EditarPost = () => {
       }
     }
   };
-
-  const handleDeleteChip = (chipToDelete) => {
-    setToDelete(chipToDelete);
-    setToValue("Color");
+  const handleDeleteChip = async (chipToDelete, valor) => {
     setOpen(true);
-
-    setChipscolor(chipscolor.filter((chip) => chip !== chipToDelete));
+    setToDelete(chipToDelete);
+    setDrawerType(valor);
   };
 
   const handleChipClick = (chipValue) => {
@@ -330,21 +371,6 @@ const EditarPost = () => {
 
       // fetchData(chipValue);
     }
-  };
-
-  const handleDeleteChips = (chipToDelete) => {
-    setOpen(true);
-    const parts = chipToDelete.split(":");
-    setToDelete(parts[0]);
-    setToValue("Talla");
-    setChips(chips.filter((chip) => chip !== chipToDelete));
-  };
-  const handleDeleteChips2 = (chipToDelete) => {
-    console.log("wettin");
-    setChipsnew(chipsnew.filter((chip) => chip !== chipToDelete));
-    const updatedPrices = { ...prices };
-    delete updatedPrices[chipToDelete];
-    setPrices(updatedPrices);
   };
 
   const handlePriceChanges = (e, chipName) => {
@@ -575,7 +601,7 @@ const EditarPost = () => {
             label={chip.label}
             style={{ margin: 3 }}
             onClick={() => handleDrawerOpen("color", chip)}
-            onDelete={() => handleDeleteChip(chip)}
+            onDelete={() => handleDeleteChip(chip, "color")}
           />
         ))}
         <IconButton color="primary" onClick={() => handleDrawerOpen("color")}>
@@ -588,30 +614,16 @@ const EditarPost = () => {
         </Typography>
         {chips.map((chip, index) => (
           <Chip
-            label={`${chip.label} : $${chip.precio}`}
+            label={`${chip.label} : ${chip.precio}`}
             style={{ margin: 3 }}
             onClick={() => handleDrawerOpen("talla", chip)}
-            onDelete={() => handleDeleteChips(chip)}
+            onDelete={() => handleDeleteChip(chip, "talla")}
           />
         ))}
         <IconButton color="primary" onClick={() => handleDrawerOpen("talla")}>
           <AddIcon />
         </IconButton>
       </div>
-      {chipsnew.map((chip, index) => (
-        <Box
-          key={index}
-          display="flex"
-          alignItems="center"
-          marginY={isMobile ? 1 : 5}
-        >
-          <Chip
-            label={chip}
-            style={{ margin: 3 }}
-            onDelete={() => handleDeleteChips2(chip)}
-          />
-        </Box>
-      ))}
 
       <Grid container spacing={2} marginTop={isMobile ? 5 : 0}>
         <Grid item xs={12}>

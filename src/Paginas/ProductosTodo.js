@@ -514,17 +514,18 @@ const ProductoTodo = () => {
                       </Typography>
                     </CardContent>
 
-                    {/* <CardActions sx={{ justifyContent: "center", pb: 2 }}>
-                      <Button
-                        variant="contained"
-                        size="small"
-                        // onClick={() => HANDLEDETALES(product.Codigo)}
-                        onClick={() => console.log(product)}
-                        sx={{ fontWeight: "bold" }}
-                      >
-                        {product.Stock === 0 ? "Sin Stock" : "VER DETALLES"}
-                      </Button>
-                    </CardActions> */}
+                    {
+                      // <CardActions sx={{ justifyContent: "center", pb: 2 }}>
+                      //   <Button
+                      //     variant="contained"
+                      //     size="small"
+                      //     onClick={() => HANDLEDETALES(product.Codigo)}
+                      //     sx={{ fontWeight: "bold" }}
+                      //   >
+                      //     {product.Stock === 0 ? "Sin Stock" : "VER DETALLES"}
+                      //   </Button>
+                      // </CardActions>
+                    }
                     {/* {product.RealImagen === undefined && (
                       <Typography
                         variant="h6"
