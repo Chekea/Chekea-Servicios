@@ -49,6 +49,87 @@ import {
   ref as storageref,
   uploadBytes,
 } from "firebase/storage";
+import { useLocation } from "react-router";
+const categorias = [
+  {
+    nombre: "Moda & Accesorios",
+    subcategorias: [
+      "Trajes",
+      "Faldas",
+      "Vestidos",
+      "Bolsos",
+      "Pantalones",
+      "Calzado",
+      "Camisas",
+      "Ropa Interior",
+      "Accesorios",
+    ],
+  },
+  {
+    nombre: "Complementos para peques",
+    subcategorias: [
+      "Bebés",
+      "Niños",
+      "Juguetes",
+      "Moda",
+      "Carritos",
+      "Mochilas",
+      "Accesorios",
+    ],
+  },
+  {
+    nombre: "Deporte",
+    subcategorias: ["Ropa", "Calzado", "Accesorios", "Gimnasio"],
+  },
+  {
+    nombre: "Electrónica",
+    subcategorias: [
+      "Móviles",
+      "Tablets",
+      "Ordenadores",
+      "Auriculares",
+      "Televisores",
+      "Cámaras",
+      "Drones",
+    ],
+  },
+  {
+    nombre: "Belleza & Accesorios",
+    subcategorias: [
+      "Maquillaje",
+      "Cabello",
+      "Piel",
+      "Uñas",
+      "Cremas",
+      "Cepillos",
+      "Accesorios",
+    ],
+  },
+  {
+    nombre: "Hogar",
+    subcategorias: [
+      "Accesorios",
+      "Cocina",
+      "Baño",
+      "Decoración",
+      "Limpieza",
+      "Jardín",
+      "Iluminación",
+    ],
+  },
+  {
+    nombre: "Otros",
+    subcategorias: [
+      "Mascotas",
+      "Viajes",
+      "Oficina",
+      "Arte",
+      "Música",
+      "Regalos",
+      "Accesorios",
+    ],
+  },
+];
 
 const ImagePreview = ({ file, onRemove, index, sx }) => {
   const [src, setSrc] = useState("");
@@ -103,6 +184,9 @@ const ImagePreview = ({ file, onRemove, index, sx }) => {
 const Publicar = () => {
   const [title, setTitle] = useState("");
   const [price, setPrice] = useState("");
+  const location = useLocation();
+  const userName = location.state?.userName || "";
+  console.log(userName);
 
   const [cantidad, setCantidad] = useState("");
   const [dimension, setDimension] = useState("");
@@ -121,8 +205,9 @@ const Publicar = () => {
   const [imgs, setimgs] = useState(null);
   const [selectedPeso, setSelectedPeso] = useState(null);
   const [selectedDimension, setSelectedDimension] = useState(null);
+  const [selectedsubCategoria, setSelectedSubCategoria] = useState(null);
   const [selectedCategoria, setSelectedCategoria] = useState(null);
-
+  const [selectedGender, setSelectedGender] = useState(null);
   let MARGEN = 1.3;
 
   let categ = "Moda & Accesorios"; //Categoria
@@ -135,6 +220,7 @@ const Publicar = () => {
     { nombre: "Pesado", min: 2.01, max: 3.5 },
     { nombre: "Muy pesado", min: 3.51, max: 4.5 },
     { nombre: "Extremadamente pesado", min: 4.51, max: 6.0 },
+    { nombre: "Solo Barco", min: 7, max: 7 },
   ];
   const subCategorias = [
     { nombre: "Trajes", estimacion: { min: 0.8, max: 1.4 } },
@@ -148,6 +234,25 @@ const Publicar = () => {
     { nombre: "Ropa Interior", estimacion: { min: 0.3, max: 0.7 } },
   ];
 
+  function getCategoriasPorUsuario(username) {
+    const user = username.trim().toLowerCase();
+
+    const permisos = {
+      "01": ["Moda & Accesorios", "Complementos para peques"],
+      1: ["Belleza & Accesorios", "Deporte"],
+      "001": ["Hogar", "Otros"],
+
+      admin: ["Electrónica", "Hogar"],
+    };
+
+    // Si el usuario tiene permisos definidos
+    if (permisos[user]) {
+      return categorias.filter((cat) => permisos[user].includes(cat.nombre));
+    }
+
+    // Si el usuario no tiene permisos → devolver vacío o todo
+    return [];
+  }
   // ROPA Y ACCESORIOS
 
   console.log("eiby bielo");
@@ -177,6 +282,15 @@ const Publicar = () => {
   let maysaID = "y7eJBoQ23feGEF3HAF2sZxpDKig1";
 
   const storage = getStorage(app);
+  const handleCategoriaClick = (nombre) => {
+    setSelectedCategoria((prev) => (prev === nombre ? null : nombre));
+    console.log(selectedsubCategoria, "heis");
+    setSelectedSubCategoria(null); // ✅ Limpia la subcategoría al cambiar
+  };
+
+  const categoriaSeleccionada = categorias.find(
+    (cat) => cat.nombre === selectedCategoria
+  );
 
   const handleTitleChange = (e) =>
     setTitle(capitalizeFirstLetter(e.target.value));
@@ -191,19 +305,11 @@ const Publicar = () => {
 
   const handleChipClickPeso = (peso) => {
     // Si el chip ya está seleccionado, lo deselecciona
-    if (selectedPeso === peso) {
-      setSelectedPeso(null);
-    } else {
-      setSelectedPeso(peso);
-    }
+    setSelectedPeso((prev) => (prev === peso ? null : peso)); // Si clicas la misma, se oculta
   };
   const handleChipClickCategoria = (peso) => {
     // Si el chip ya está seleccionado, lo deselecciona
-    if (selectedPeso === peso) {
-      setSelectedCategoria(null);
-    } else {
-      setSelectedCategoria(peso);
-    }
+    setSelectedSubCategoria((prev) => (prev === peso ? null : peso)); // Si clicas la misma, se oculta
   };
 
   const handleChipClickDimension = (dimension) => {
@@ -425,68 +531,7 @@ const Publicar = () => {
   const getCurrentTimeInMilliseconds = () => {
     return Date.now();
   };
-  // Main Submit Handler
-  // const handleSubmit = async (e) => {
-  //   e.preventDefault();
-  //   setLoading(true); // Start loading
 
-  //   const fecha = getCurrentTimeInMilliseconds();
-
-  //   try {
-  //     // Genera una nueva referencia de documento con ID automático
-  //     const newItemRef = doc(collection(db, "productos"));
-  //     const codigo = newItemRef.id;
-
-  //     if (images.length < 2) {
-  //       throw new Error("Se necesitan al menos 2 imágenes para continuar.");
-  //     }
-
-  //     // Prepara datos comunes
-  //     let commonData = await prepareCommonData(codigo, fecha);
-
-  //     // Subir imágenes y obtener URLs
-  //     const imageUrls = await uploadImagesToStorage(images);
-
-  //     // Guardar imágenes principales y subnodo de imágenes
-  //     commonData.Imagen = imageUrls[0]; // Primera imagen
-  //     commonData.Imagenes = await createImagesNode(codigo, imageUrls);
-
-  //     // Últimas dos imágenes
-  //     commonData.RealImage = imageUrls[imageUrls.length - 2];
-  //     commonData.PaqueteImage = imageUrls[imageUrls.length - 1];
-
-  //     // Guardar imágenes restantes (excluyendo las dos últimas)
-  //     const filteredImages = imageUrls.slice(0, -2);
-  //     commonData.Imagen = filteredImages[0] || "";
-  //     commonData.Imagenes = await createImagesNode(codigo, filteredImages);
-
-  //     // Subnodos para colores y tallas
-  //     commonData.Color = await createColorsNode(codigo);
-  //     if (chips.length > 0) {
-  //       commonData.Talla = await createSizesNode(codigo);
-  //     }
-
-  //     // Guardar en Firestore
-  //     await setDoc(newItemRef, commonData);
-
-  //     // Guardar en 'filtros' si es necesario
-  //     // await storeInFiltrosNode(codigo, commonData);
-
-  //     setLoading(false);
-  //     setImages([]);
-  //     setChipscolor([]);
-  //     setChips([]);
-  //     setTitle("");
-  //     setDetails("");
-  //     setPrice("");
-
-  //     alert("Data submitted successfully!");
-  //   } catch (error) {
-  //     setLoading(false);
-  //     alert("ERROR INESPERADO");
-  //     console.error("Transaction failed: ", error);
-  //   }
-  // };
   function normalizarTexto(texto) {
     return texto
       .toLowerCase()
@@ -508,15 +553,14 @@ const Publicar = () => {
       Titulo: title,
       Ttoken: tokens,
       Categoria: categ,
-      Genero: "Femenina",
-      Subcategoria: selectedCategoria, // Baño
+      Subcategoria: selectedsubCategoria, // Baño
       Codigo: codigo,
-      Precio: parseInt(price * MARGEN + 1000),
+      Precio: parseInt(price * MARGEN + 1500),
       Peso: selectedPeso,
       Dimension: selectedDimension || "Paquete mediano",
       Detalles: details,
       Vistos: 0,
-      Vendedor: maysaID,
+      Vendedor: userName,
       // Compras: 0,
       Fecha: fecha,
       // Descuento: 0,
@@ -526,6 +570,9 @@ const Publicar = () => {
     // 📌 Solo agregar Stock si el país es "Guinea ecuatorial"
     if (country === "Guinea ecuatorial") {
       data.Stock = parseInt(cantidad);
+    }
+    if (selectedsubCategoria == "Moda & Accesorios") {
+      data.Genero = selectedGender;
     }
 
     return data;
@@ -629,6 +676,45 @@ const Publicar = () => {
       );
     } catch (error) {
       console.error("❌ Error eliminando campos:", error);
+    }
+  }
+
+  async function actualizarContador(username) {
+    try {
+      // 🔹 Mapa para relacionar usuario con su campo
+      const userMap = {
+        1: "Asly",
+        "01": "Maysa",
+        "001": "Vicky",
+      };
+
+      const nombreCampo = userMap[username];
+      if (!nombreCampo) {
+        console.log("Usuario no válido");
+        return;
+      }
+
+      // 🔹 Referencia al documento en Firestore
+      const ref = doc(db, "GE_Info", "Nombres");
+
+      // 🔹 Obtener el documento actual
+      const snapshot = await getDoc(ref);
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        const valorActual = data[nombreCampo] || 0;
+
+        // 🔹 Incrementar el valor
+        const nuevoValor = valorActual + 1;
+
+        // 🔹 Subir el nuevo valor
+        await updateDoc(ref, { [nombreCampo]: nuevoValor });
+
+        console.log(`✅ ${nombreCampo} actualizado a ${nuevoValor}`);
+      } else {
+        console.log("El documento 'Nombres' no existe.");
+      }
+    } catch (error) {
+      console.error("❌ Error al actualizar contador:", error);
     }
   }
 
@@ -749,7 +835,7 @@ const Publicar = () => {
       const sizeData = {
         id: sizeId,
         label: size,
-        precio: prices[size] > 0 ? parseInt(prices[size] * MARGEN + 1000) : 0,
+        precio: prices[size] > 0 ? parseInt(prices[size] * MARGEN + 1500) : 0,
       };
       sizesNode.push(sizeData);
 
@@ -785,7 +871,7 @@ const Publicar = () => {
           "Cuidado!!!, Se necesitan al menos 3 imágenes para continuar."
         );
       }
-      if (!selectedCategoria) {
+      if (!selectedsubCategoria) {
         throw new Error("Cuidado!!!, no haz seleccionado la subcategorias");
       }
 
@@ -832,6 +918,8 @@ const Publicar = () => {
       // Guardar colores y tallas
       if (chipscolor.length > 0) await createColorsNode(codigo, chipscolor);
       if (chips.length > 0) await createSizesNode(codigo, chips, prices);
+
+      await actualizarContador(userName);
 
       // Reset de estados
       setLoading(false);
@@ -995,21 +1083,6 @@ const Publicar = () => {
 
               return (
                 <Box key={index}>
-                  {/* {(isSecondLast || isLast) && (
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      fontWeight: "bold",
-                      color: isSecondLast ? "#1976d2" : "#d32f2f",
-                      mb: 0.5,
-                    }}
-                  >
-                    {isSecondLast
-                      ? "Imagen Real (Penúltima)"
-                      : "Imagen Paquete (Última)"}
-                  </Typography>
-                )} */}
-
                   <ImagePreview
                     file={file}
                     sx={{ border: isLast ? "2px solid red" : "none" }}
@@ -1026,56 +1099,132 @@ const Publicar = () => {
           onSubmit={handleSubmit}
           sx={{ padding: 2, paddingTop: 8 }}
         >
-          <div
-            style={{
-              width: "100%",
-              margin: 10,
-              padding: 20,
-              border: "2px solid #ccc",
-              borderRadius: 10,
-              position: "relative",
-              boxSizing: "border-box",
-              backgroundColor: "#fff",
-            }}
-          >
-            <span
-              style={{
-                position: "absolute",
-                top: -12,
-                left: 20,
-                backgroundColor: "#fff",
-                padding: "0 8px",
-                fontSize: 16,
-                fontWeight: "bold",
-                color: "#333",
-              }}
-            >
-              Subcategorias
-            </span>
-
+          <div style={{ width: "100%", padding: 20 }}>
+            <h2 style={{ textAlign: "center" }}>Categorías</h2>
             <div
               style={{
                 display: "flex",
                 flexWrap: "wrap",
                 justifyContent: "center",
-                width: "100%",
+                marginBottom: 20,
               }}
             >
-              {subCategorias.map((option) => (
+              {getCategoriasPorUsuario(userName).map((cat) => (
                 <Chip
-                  key={option.nombre}
-                  label={`${option.nombre} Estimacion: ${option.estimacion.min} - ${option.estimacion.max} Kg`}
-                  style={{ margin: 5 }}
+                  key={cat.nombre}
+                  label={cat.nombre}
                   clickable
-                  onClick={() => handleChipClickCategoria(option.nombre)}
+                  onClick={() => handleCategoriaClick(cat.nombre)}
                   color={
-                    selectedCategoria === option.nombre ? "primary" : "default"
+                    selectedCategoria === cat.nombre ? "primary" : "default"
                   }
+                  style={{ margin: 5, fontSize: 14 }}
                 />
               ))}
             </div>
+
+            {categoriaSeleccionada && (
+              <div
+                style={{
+                  width: "100%",
+                  margin: 10,
+                  padding: 20,
+                  border: "2px solid #ccc",
+                  borderRadius: 10,
+                  position: "relative",
+                  boxSizing: "border-box",
+                  backgroundColor: "#fff",
+                }}
+              >
+                <span
+                  style={{
+                    position: "absolute",
+                    top: -12,
+                    left: 20,
+                    backgroundColor: "#fff",
+                    padding: "0 8px",
+                    fontSize: 16,
+                    fontWeight: "bold",
+                    color: "#333",
+                  }}
+                >
+                  Subcategorías de {categoriaSeleccionada.nombre}
+                </span>
+
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    justifyContent: "center",
+                    width: "100%",
+                  }}
+                >
+                  {categoriaSeleccionada.subcategorias.map((sub) => (
+                    <Chip
+                      key={sub}
+                      label={sub}
+                      style={{ margin: 5 }}
+                      onClick={() => handleChipClickCategoria(sub)}
+                      color={
+                        selectedsubCategoria === sub ? "primary" : "default"
+                      }
+                      clickable
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
+          {categoriaSeleccionada?.nombre === "Moda & Accesorios" && (
+            <div
+              style={{
+                width: "100%",
+                margin: 10,
+                padding: 20,
+                border: "2px solid #ccc",
+                borderRadius: 10,
+                position: "relative",
+                boxSizing: "border-box",
+                backgroundColor: "#fff",
+              }}
+            >
+              <span
+                style={{
+                  position: "absolute",
+                  top: -12,
+                  left: 20,
+                  backgroundColor: "#fff",
+                  padding: "0 8px",
+                  fontSize: 16,
+                  fontWeight: "bold",
+                  color: "#333",
+                }}
+              >
+                Género
+              </span>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  justifyContent: "center",
+                  width: "100%",
+                }}
+              >
+                {["Femenina", "Masculina"].map((gender) => (
+                  <Chip
+                    key={gender}
+                    label={gender}
+                    style={{ margin: 5 }}
+                    clickable
+                    color={selectedGender === gender ? "primary" : "default"}
+                    onClick={() => setSelectedGender(gender)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
           <div
             style={{
               width: "100%",
@@ -1114,7 +1263,11 @@ const Publicar = () => {
               {pesos.map((option) => (
                 <Chip
                   key={option.nombre}
-                  label={`min ${option.min} - max ${option.max} Kg`}
+                  label={
+                    option.min == 7
+                      ? "Solo Barco"
+                      : `min ${option.min} - max ${option.max} Kg`
+                  }
                   style={{ margin: 5 }}
                   clickable
                   onClick={() => handleChipClickPeso(option.nombre)}
@@ -1123,9 +1276,12 @@ const Publicar = () => {
               ))}
             </div>
           </div>
-          {["Pesado", "Muy pesado", "Extremadamente pesado"].includes(
-            selectedPeso
-          ) && (
+          {[
+            "Pesado",
+            "Muy pesado",
+            "Extremadamente pesado",
+            "Solo Barco",
+          ].includes(selectedPeso) && (
             <div
               style={{
                 width: "100%",

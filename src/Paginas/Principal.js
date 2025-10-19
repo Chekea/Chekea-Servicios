@@ -6,14 +6,22 @@ import ImageUploading from "react-images-uploading";
 import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
 import { compressImage } from "../ayuda";
 import TensorFlow from "./componentes/TensorFlow";
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Button,
+} from "@mui/material";
 
 const items = [
-  // { name: "Compras", link: "/Nacional" },
-  // { name: "Exterior", link: "/Exterior" },
-  { name: "MaisaProd", link: "/Buscar" },
-  // { name: "P2P Vuelos", link: "/Contabilidad" },
+  { name: "Compras", link: "/Nacional" },
+  { name: "Publicados", link: "/Buscar" },
+  { name: "Aslyprod", link: "/Buscar" },
+
   { name: "Publicar", link: "/Publicar" },
-  // { name: "Farmacias", link: "/Farmacias" },
+  { name: "Farmacias", link: "/Farmacias" },
 ];
 
 const colors = ["#FFCDD2", "#C8E6C9", "#BBDEFB", "#FFECB3"];
@@ -21,6 +29,26 @@ const colors = ["#FFCDD2", "#C8E6C9", "#BBDEFB", "#FFECB3"];
 const Principal = ({ email, logout }) => {
   const [images, setImages] = useState([]);
   const maxNumber = 1; // Only allow one image
+  const [name, setName] = useState(localStorage.getItem("userName") || "");
+  const [showPopup, setShowPopup] = useState(!localStorage.getItem("userName"));
+  const filteredItems = items.filter((item) => {
+    if (showPopup) return false;
+
+    const user = name.trim().toLowerCase();
+
+    // Si es admin → mostrar todos
+    if (user === "admin") return true;
+
+    // Si es 01 → mostrar MaisaProd y Publicar
+    if (user === "01" || user === "001" || user === "1") {
+      return ["Publicados", "Publicar"].includes(item.name);
+    }
+
+    // Si es 001 → mostrar Compras y Exterior
+
+    // Cualquier otro nombre → no mostrar nada
+    return false;
+  });
 
   const navigate = useNavigate();
   const dataURLToFile = (dataUrl, filename) => {
@@ -60,19 +88,9 @@ const Principal = ({ email, logout }) => {
   };
 
   const handleBoxClick = (link) => {
-    navigate(link);
+    navigate(link, { state: { userName: name } });
   };
 
-  const filteredItems = items.filter((item) => {
-    // Adjust the condition based on the email
-    if (email === "nawetin@gmail.com") {
-      return ["Compras", "Otros"].includes(item.name);
-    } else if (email === "chekeagroup@gmail.com") {
-      return ["Compras", "Contabilidad", "Otros"].includes(item.name);
-    }
-    // Default to showing all items if email doesn't match
-    return true;
-  });
   const [open, setOpen] = useState(false);
   const [mensaje, setmensaje] = useState("Seguro que desea cerrar session");
   const handleOpen = (object) => {
@@ -88,43 +106,89 @@ const Principal = ({ email, logout }) => {
     // <div>
     //   <TensorFlow />
     // </div>
-    <Grid container spacing={2} padding={5}>
-      <Alert
-        open={open}
-        message={mensaje}
-        onClose={handleClose}
-        onConfirm={handleConfirm}
-      />
-      {/* <div style={{ position: "fixed", bottom: 20, right: 25 }}>
+
+    <>
+      <Grid container spacing={2} padding={5}>
+        <Dialog open={showPopup} disableEscapeKeyDown>
+          <DialogTitle>Ingresa tu nombre</DialogTitle>
+          <DialogContent>
+            <TextField
+              autoFocus
+              margin="dense"
+              label="Nombre"
+              type="text"
+              fullWidth
+              variant="outlined"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button
+              onClick={() => {
+                if (name.trim() === "") {
+                  alert("Por favor, escribe un nombre.");
+                  return;
+                }
+                // guardar el nombre en localStorage
+                localStorage.setItem("userName", name.trim());
+                setShowPopup(false);
+              }}
+              variant="contained"
+            >
+              Confirmar
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Alert
+          open={open}
+          message={mensaje}
+          onClose={handleClose}
+          onConfirm={handleConfirm}
+        />
+        {/* <div style={{ position: "fixed", bottom: 20, right: 25 }}>
         <button style={{ padding: 15 }} onClick={() => handleOpen()}>
           Cerrar Sesión
         </button>
       </div> */}
-      {filteredItems.map((item, index) => (
-        <Grid item xs={6} sm={6} md={4} lg={3} key={index} display="flex">
-          <Paper
-            elevation={3}
-            onClick={() => handleBoxClick(item.link)}
-            style={{
-              backgroundColor: colors[index % colors.length],
-              padding: "20px",
-              cursor: "pointer",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              width: "100%",
-              maxWidth: "100px",
-              height: "150px",
-              borderRadius: "10px",
-            }}
-          >
-            <Typography align="center" fontSize={"1.2rem"}>
-              {item.name}
-            </Typography>
-          </Paper>
-        </Grid>
-      ))}
-    </Grid>
+        {filteredItems.map((item, index) => (
+          <Grid item xs={6} sm={6} md={4} lg={3} key={index} display="flex">
+            <Paper
+              elevation={3}
+              onClick={() => handleBoxClick(item.link)}
+              style={{
+                backgroundColor: colors[index % colors.length],
+                padding: "20px",
+                cursor: "pointer",
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                width: "100%",
+                maxWidth: "100px",
+                height: "150px",
+                borderRadius: "10px",
+              }}
+            >
+              <Typography align="center" fontSize={"1.2rem"}>
+                {item.name}
+              </Typography>
+            </Paper>
+          </Grid>
+        ))}
+      </Grid>
+
+      <Button
+        variant="outlined"
+        onClick={() => {
+          localStorage.removeItem("userName");
+          setName("");
+          setShowPopup(true);
+        }}
+      >
+        Cambiar usuario
+      </Button>
+    </>
   );
 };
 

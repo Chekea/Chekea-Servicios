@@ -20,7 +20,7 @@ import {
   Slider,
   FormControl,
 } from "@mui/material";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import Cabezal from "./componentes/Cabezal";
 
 import app from "../Servicios/firebases";
@@ -37,12 +37,16 @@ import {
   doc,
   getDocs,
   where,
+  getDoc,
 } from "firebase/firestore";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import axios from "axios";
 
 const ProductoTodo = () => {
+  const location = useLocation();
+  const userName = location.state?.userName || "";
+  console.log(userName);
   const [products, setProducts] = useState([]);
   const [selectedChip, setSelectedChip] = useState("Nacional");
   const [lastDoc, setLastDoc] = useState(null);
@@ -57,7 +61,7 @@ const ProductoTodo = () => {
   const [priceRange, setPriceRange] = useState([0, 0]);
   const [productos, setProductos] = useState([]);
   const [selectedLocation, setSelectedLocation] = useState("China");
-
+  const [nombre, setNombre] = useState("");
   console.log("Productos cargados:", products);
   const handleCloseDrawer = () => {
     setDrawerOpen(false);
@@ -76,7 +80,7 @@ const ProductoTodo = () => {
       const productosRef = collection(db, "productos");
       let filtros = [];
 
-      filtros.push(where("Vendedor", "==", "y7eJBoQ23feGEF3HAF2sZxpDKig1"));
+      filtros.push(where("Vendedor", "==", userName));
 
       let q = query(productosRef, orderBy("Fecha", "desc"), ...filtros);
       const querySnapshot = await getDocs(q);
@@ -141,6 +145,36 @@ const ProductoTodo = () => {
     }
   }
 
+  async function handleCantidad() {
+    try {
+      // Referencia al documento "asly"
+      const aslyRef = doc(db, "GE_Info", "Nombres");
+      const snapshot = await getDoc(aslyRef);
+
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        let nombre;
+
+        if (userName === "1") {
+          nombre = "Asly";
+        } else if (userName === "01") {
+          nombre = "Maysa";
+        } else if (userName === "001") {
+          nombre = "Vicky";
+        } else {
+          console.log("Usuario no válido");
+          return;
+        }
+
+        const valorLeido = data[nombre];
+        setNombre(valorLeido);
+      } else {
+        console.log("El documento 'asly' no existe");
+      }
+    } catch (error) {
+      console.error("Error al leer el documento:", error);
+    }
+  }
   const handleConfirmSearch = async () => {
     setLoading(true);
     setProducts([]);
@@ -159,6 +193,10 @@ const ProductoTodo = () => {
     setHasMore(!!lastVisibleDoc);
     setLoading(false);
   };
+
+  useEffect(() => {
+    handleCantidad();
+  }, []);
 
   const abrirFiltros = async () => {
     setDrawerOpen(false);
@@ -418,7 +456,7 @@ const ProductoTodo = () => {
         component="div"
         sx={{ fontWeight: "bold" }}
       >
-        {`Publicados por Maysa (${products.length})`}
+        {`Cantidad Publicados (${nombre})`}
       </Typography>
       <Box sx={{ display: "flex", justifyContent: "center", my: 2 }}>
         <TextField
@@ -515,16 +553,16 @@ const ProductoTodo = () => {
                     </CardContent>
 
                     {
-                      // <CardActions sx={{ justifyContent: "center", pb: 2 }}>
-                      //   <Button
-                      //     variant="contained"
-                      //     size="small"
-                      //     onClick={() => HANDLEDETALES(product.Codigo)}
-                      //     sx={{ fontWeight: "bold" }}
-                      //   >
-                      //     {product.Stock === 0 ? "Sin Stock" : "VER DETALLES"}
-                      //   </Button>
-                      // </CardActions>
+                      <CardActions sx={{ justifyContent: "center", pb: 2 }}>
+                        <Button
+                          variant="contained"
+                          size="small"
+                          onClick={() => HANDLEDETALES(product.Codigo)}
+                          sx={{ fontWeight: "bold" }}
+                        >
+                          {product.Stock === 0 ? "Sin Stock" : "VER DETALLES"}
+                        </Button>
+                      </CardActions>
                     }
                     {/* {product.RealImagen === undefined && (
                       <Typography
