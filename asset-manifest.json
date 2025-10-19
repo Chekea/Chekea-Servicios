@@ -1,16 +1,16 @@
 {
   "files": {
     "main.css": "/Chekea-Servicios/static/css/main.593ecbda.css",
-    "main.js": "/Chekea-Servicios/static/js/main.0eafccbf.js",
+    "main.js": "/Chekea-Servicios/static/js/main.3c7f77a5.js",
     "static/js/988.0fc5c201.chunk.js": "/Chekea-Servicios/static/js/988.0fc5c201.chunk.js",
     "static/js/655.6f21535a.chunk.js": "/Chekea-Servicios/static/js/655.6f21535a.chunk.js",
     "static/js/499.c22c7a8b.chunk.js": "/Chekea-Servicios/static/js/499.c22c7a8b.chunk.js",
-    "static/js/291.d54cdc6c.chunk.js": "/Chekea-Servicios/static/js/291.d54cdc6c.chunk.js",
+    "static/js/291.55cd935b.chunk.js": "/Chekea-Servicios/static/js/291.55cd935b.chunk.js",
     "static/js/821.14baf177.chunk.js": "/Chekea-Servicios/static/js/821.14baf177.chunk.js",
     "static/js/412.1e92cfed.chunk.js": "/Chekea-Servicios/static/js/412.1e92cfed.chunk.js",
     "static/js/671.abf97bff.chunk.js": "/Chekea-Servicios/static/js/671.abf97bff.chunk.js",
     "static/js/720.22ce70fb.chunk.js": "/Chekea-Servicios/static/js/720.22ce70fb.chunk.js",
-    "static/js/48.f0e6c2f6.chunk.js": "/Chekea-Servicios/static/js/48.f0e6c2f6.chunk.js",
+    "static/js/564.924c6668.chunk.js": "/Chekea-Servicios/static/js/564.924c6668.chunk.js",
     "static/js/206.53c48c4b.chunk.js": "/Chekea-Servicios/static/js/206.53c48c4b.chunk.js",
     "static/js/277.aeb6a8c2.chunk.js": "/Chekea-Servicios/static/js/277.aeb6a8c2.chunk.js",
     "static/js/246.f003a95b.chunk.js": "/Chekea-Servicios/static/js/246.f003a95b.chunk.js",
@@ -22,6 +22,6 @@
   },
   "entrypoints": [
     "static/css/main.593ecbda.css",
-    "static/js/main.0eafccbf.js"
+    "static/js/main.3c7f77a5.js"
   ]
 }
