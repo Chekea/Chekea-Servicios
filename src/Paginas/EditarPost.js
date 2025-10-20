@@ -45,6 +45,7 @@ import {
   updateDoc,
   addDoc,
   deleteDoc,
+  setDoc,
 } from "firebase/firestore";
 
 import app from "./../Servicios/firebases";
@@ -140,9 +141,10 @@ const EditarPost = () => {
 
     if (chip) {
       // si es un chip de tipo "talla" con precio
+      console.log(chip.precio, "hoal");
       if (type === "talla") {
         setNewColor(chip.label ?? "");
-        setNewPrice(chip.price ?? 0);
+        setNewPrice(chip.precio ?? 0);
       } else {
         setNewColor(chip.label ?? "");
         setNewPrice("");
@@ -157,58 +159,86 @@ const EditarPost = () => {
   };
 
   const handleDrawerClose = () => setDrawerOpen(false);
-
+  const MARGEN = (preciobase) => {
+    if (preciobase <= 7000) {
+      return preciobase * 1.3 + 1500;
+    } else if (preciobase <= 25000) {
+      return preciobase * 1.22 + 1000;
+    } else if (preciobase <= 250000) {
+      return preciobase * 1.15;
+    } else if (preciobase <= 500000) {
+      return preciobase * 1.12;
+    } else {
+      return preciobase * 1.08 + 100000;
+    }
+  };
   const handleSaveNew = async () => {
     if (!newColor) return;
     const productoRef = doc(db, "productos", codigo);
 
     if (drawerType === "color") {
       if (dataChip) {
+        // Editar color existente
         setChipscolor((prev) =>
-          prev.map((c) => (c === dataChip ? { label: newColor } : c))
+          prev.map((c) =>
+            c.id === dataChip.id ? { ...c, label: newColor } : c
+          )
         );
 
-        // Editar color existente
         const colorRef = doc(collection(productoRef, "colores"), dataChip.id);
-        // await updateDoc(colorRef, { label: newColor });
-        console.log(newColor);
+        await updateDoc(colorRef, { label: newColor });
+        console.log("Color editado:", newColor);
       } else {
-        const newColorObj = { label: newColor };
+        // Crear nuevo color con ID dentro del documento
+        const newDocRef = doc(collection(productoRef, "colores")); // genera ID
+        const newColorObj = {
+          id: newDocRef.id,
+          label: newColor,
+        };
 
+        // Guardar documento en Firestore
+        await setDoc(newDocRef, newColorObj);
+
+        // Actualizar estado local
         setChipscolor((prev) => [...prev, newColorObj]);
-
-        // Agregar nuevo color
-        // await addDoc(collection(productoRef, "colores"), {
-        //   label: newColor,
-        // });
-
-        console.log(newColor);
+        console.log("Color nuevo guardado:", newColorObj);
       }
     } else {
-      const chipObj = { label: newColor, precio: newPrice || 0 };
+      // Manejo de tallas
+      let precios = parseInt(MARGEN(newPrice));
+      const chipObj = { label: newColor, precio: precios || 0 };
       if (dataChip) {
+        // Editar talla existente
         setChips((prev) =>
           prev.map((c) =>
             c.id === dataChip.id
-              ? { ...c, label: newColor, precio: newPrice }
+              ? { ...c, label: newColor, precio: precios }
               : c
           )
         );
+
         const tallaRef = doc(collection(productoRef, "tallas"), dataChip.id);
         // await updateDoc(tallaRef, chipObj);
-        console.log(chipObj);
+        console.log("Talla editada:", chipObj);
       } else {
-        setChips((prev) => [...prev, chipObj]);
+        // Crear nueva talla
+        const newTallaRef = doc(collection(productoRef, "tallas")); // genera ID
+        const newTallaObj = { id: newTallaRef.id, ...chipObj };
 
-        // await addDoc(collection(productoRef, "tallas"), chipObj);
-        console.log(chipObj);
+        await setDoc(newTallaRef, newTallaObj);
+        setChips((prev) => [...prev, newTallaObj]);
+        console.log("Talla nueva guardada:", newTallaObj);
       }
     }
 
     // limpiar estados y cerrar Drawer
     setDataChip(null);
+    setChipscolor([]);
+    setChips([]);
     setNewColor("");
     setNewPrice("");
+    setOpen(false);
+
     setDrawerOpen(false);
   };
 
@@ -234,7 +264,7 @@ const EditarPost = () => {
     setOpen(false);
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     try {
       const isColor = drawerType === "color"; // 👈 Usa el mismo estado global
       const subcollection = isColor ? "colores" : "tallas";
@@ -247,11 +277,12 @@ const EditarPost = () => {
         setChips((prev) => prev.filter((chip) => chip.id !== todelete.id));
       }
 
+      console.log(todelete.id, "eliminar");
       if (!todelete.id) return;
 
-      // const productoRef = doc(db, "productos", codigo);
-      // const chipRef = doc(collection(productoRef, subcollection), chipToDelete.id);
-      // // await deleteDoc(chipRef);
+      const productoRef = doc(db, "productos", codigo);
+      const chipRef = doc(collection(productoRef, subcollection), todelete.id);
+      await deleteDoc(chipRef);
 
       console.log(
         `✅ ${isColor ? "Color" : "Talla"} '${
@@ -331,46 +362,11 @@ const EditarPost = () => {
     }
   };
 
-  //nuevo arriba
-  const handleInputChange = (e) => setInputValue(e.target.value);
-  const handleInputChangeStilo = (e) => setInputValues(e.target.value);
-
-  const handleAddChip = (e) => {
-    if (e.key === "Enter" || e.key === ",") {
-      e.preventDefault();
-      if (inputValue.trim()) {
-        setChipscolor([...chipscolor, inputValue.trim()]);
-
-        setInputValue("");
-      }
-    }
-  };
-  const handleAddChips = (e) => {
-    if (e.key === "Enter" || e.key === ",") {
-      e.preventDefault();
-      console.log(inputValues, "k es");
-      if (inputValues.trim()) {
-        setChipsnew([...chipsnew, inputValues.trim()]);
-        setPrices({ ...prices, [inputValues.trim()]: "" });
-
-        console.log("wetiin", prices);
-        setInputValues("");
-      }
-    }
-  };
   const handleDeleteChip = async (chipToDelete, valor) => {
     setOpen(true);
     setToDelete(chipToDelete);
+    console.log(chipToDelete, "a elimianr");
     setDrawerType(valor);
-  };
-
-  const handleChipClick = (chipValue) => {
-    console.log(chipValue);
-    if (chipValue !== selectedChip) {
-      setSelectedChip(chipValue);
-
-      // fetchData(chipValue);
-    }
   };
 
   const handlePriceChanges = (e, chipName) => {
@@ -450,304 +446,231 @@ const EditarPost = () => {
   const handleToggleChange = (event) => {
     setStock(event.target.checked);
   };
-  const ValueExistinDb = async (colorCode, value, value2) => {
-    const databaseRef = query(
-      ref(database, `GE/${contexto}/Prod/${codigo}/${value}`),
-      orderByChild("label"),
-      equalTo(colorCode)
-    );
-    if (value2 === "Eliminar") {
-      const snapshot = await get(databaseRef);
-
-      if (snapshot.exists()) {
-        let data;
-        let key;
-        snapshot.forEach((childSnapshot) => {
-          key = childSnapshot.key;
-        });
-        console.log("Key:", key);
-
-        // Delete the node
-        const nodeRef = ref(
-          database,
-          `GE/${contexto}/Prod/${codigo}/${value}/${key}`
-        );
-        await remove(nodeRef);
-        console.log("Node deleted successfully.");
-      }
-    } else {
-      try {
-        const snapshot = await get(databaseRef);
-        if (!snapshot.exists()) {
-          console.log("ENTRAMOS", colorCode, value);
-          pushColorToDatabase(colorCode, value);
-        }
-      } catch (error) {
-        console.error("Error checking value existence in the database:", error);
-        return false;
-      }
-    }
-  };
-  const pushColorToDatabase = async (nodeData, value) => {
-    let pais = lugar(data.Pais);
-    const colorRefKey = push(
-      ref(database, `GE/${pais}/Prod/${codigo}/${value}`)
-    ).key;
-    const colorPath = `GE/${pais}/Prod/${codigo}/${value}/${colorRefKey}`;
-    if (value === "Color") {
-      await set(ref(database, colorPath), {
-        label: nodeData,
-        codigo: colorRefKey,
-      });
-      console.log({
-        label: nodeData,
-        codigo: colorRefKey,
-      });
-    } else {
-      console.log({
-        label: nodeData,
-        precio: parseInt(prices[nodeData] === "" ? price : prices[nodeData]),
-        codigo: colorRefKey,
-      });
-      const priceToSet = parseInt(
-        prices[nodeData] === "" ? price : prices[nodeData],
-        10
-      );
-
-      await set(ref(database, colorRefKey), {
-        label: nodeData,
-        precio: priceToSet,
-        codigo: colorRefKey,
-      });
-    }
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // setLoading(true); // Start loading
+    setLoading(true); // Start loading
     //CUando toca eliminar agregar se guardan los nombres y se hace un map iterando todo
     // para asi conseguir codigo
     //verificar el error en tallas
+
     const updatedObject = {
-      ...data,
       Titulo: title,
-      Ubicacion: ubicacion,
-      Precio: parseFloat(price),
-      Cantidad: parseInt(cantidad),
-
+      Precio: parseInt(MARGEN(price)),
+      // Cantidad: parseInt(cantidad),
       Detalles: details,
-      Stock: contexto === "Nacional" ? stock : data.Stock,
-      Espacio: contexto === "Exterior" ? parseFloat(espacio) : 0,
-      Dimension:
-        dimension !== undefined ? parseFloat(dimension) : parseFloat(1.5),
+      // Stock: stock,
+      // Espacio: contexto === "Exterior" ? parseFloat(espacio) : 0,
+      // Dimension: dimension !== undefined ? parseFloat(dimension) : 1.5,
+      // Categoria: data.Categoria,
     };
-    const databaseRef = ref(database, `GE/${contexto}/Prod/${codigo}`);
-    const databaseRef2 = ref(
-      database,
-      `GE/Filtros/${contexto}/${data.Categoria}/${codigo}`
-    );
 
-    // try {
-    // //   // Update the node
-    await update(databaseRef, updatedObject);
-    await update(databaseRef2, updatedObject);
+    // Documento principal del producto
+    const productoRef = doc(db, "productos", codigo);
 
-    for (const color of chipscolor) {
-      ValueExistinDb(color, "Color", "");
-      // console.log(color);
+    try {
+      await updateDoc(productoRef, updatedObject);
+      alert("Producto modificado correctamente!");
+      setLoading(false);
+      console.log("Producto actualizado correctamente.");
+    } catch (error) {
+      setLoading(false);
+      alert("ERROR INESPERADO: " + error.message);
+      console.error("Error al actualizar el producto:", error);
+      // Aquí puedes mostrar un mensaje al usuario, por ejemplo con un toast
     }
-
-    // Add prices to the updates
-    for (const chip in prices) {
-      if (prices.hasOwnProperty(chip)) {
-        // console.log(chip);
-        ValueExistinDb(chip, "Talla", "");
-      }
-    }
-    // //   console.log("Data updated successfully");
-    // } catch (error) {
-    //   console.error("Error updating data: ", error);
-
-    console.log(updatedObject.Categoria, data);
-  };
-
-  const handleEdit = () => {
-    console.log("wetiin");
   };
 
   return (
-    <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2, padding: 2 }}>
-      <Cabezal texto={"Editar"} />
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-end",
-          justifyContent: "flex-end",
-          marginTop: isMobile ? 40 : 0,
-        }}
-      >
-        <Button variant="contained" color="info" onClick={handleOpenAlert}>
-          APLICAR DESCUENTO
-        </Button>
-      </div>
+    <>
+      {loading && (
+        <Box
+          sx={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            bgcolor: "rgba(0,0,0,0.4)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 9999,
+          }}
+        >
+          <CircularProgress size={60} color="primary" />
+        </Box>
+      )}
 
-      <div style={{ margin: 10 }}>
-        <Typography variant="subtitle1" gutterBottom>
-          Colores
-        </Typography>
-        {chipscolor.map((chip, index) => (
-          <Chip
-            key={index}
-            label={chip.label}
-            style={{ margin: 3 }}
-            onClick={() => handleDrawerOpen("color", chip)}
-            onDelete={() => handleDeleteChip(chip, "color")}
-          />
-        ))}
-        <IconButton color="primary" onClick={() => handleDrawerOpen("color")}>
-          <AddIcon />
-        </IconButton>
-      </div>
-      <div style={{ margin: 10 }}>
-        <Typography variant="subtitle1" gutterBottom>
-          Tallas
-        </Typography>
-        {chips.map((chip, index) => (
-          <Chip
-            label={`${chip.label} : ${chip.precio}`}
-            style={{ margin: 3 }}
-            onClick={() => handleDrawerOpen("talla", chip)}
-            onDelete={() => handleDeleteChip(chip, "talla")}
-          />
-        ))}
-        <IconButton color="primary" onClick={() => handleDrawerOpen("talla")}>
-          <AddIcon />
-        </IconButton>
-      </div>
-
-      <Grid container spacing={2} marginTop={isMobile ? 5 : 0}>
-        <Grid item xs={12}>
-          <TextField
-            label="Title"
-            variant="outlined"
-            value={title}
-            onChange={handleTitleChange}
-            required
-            fullWidth
-          />
-        </Grid>
-
-        <Grid item xs={12}>
-          <TextField
-            label="Price"
-            variant="outlined"
-            type="number"
-            value={price}
-            onChange={handlePriceChange}
-            required
-            fullWidth
-          />
-        </Grid>
-        {contexto === "Nacional" && (
-          <Box display="flex" alignItems="flex-end" marginY={1} margin={1}>
-            <TextField
-              label="Cantidad"
-              type="number"
-              value={cantidad}
-              onChange={handleCantidad}
-              style={{ marginLeft: "8px" }}
-            />
-            <div style={{ margin: 10, marginLeft: 30 }}>
-              <FormControlLabel
-                control={
-                  <Switch checked={stock} onChange={handleToggleChange} />
-                }
-                label="Stock"
-              />
-            </div>
-          </Box>
-        )}
-
-        <Grid item xs={12}>
-          <TextField
-            label="Details"
-            variant="outlined"
-            multiline
-            rows={4}
-            value={details}
-            onChange={handleDetailsChange}
-            required
-            fullWidth
-          />
-        </Grid>
-
+      <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2, padding: 2 }}>
+        <Cabezal texto={"Editar"} />
         <div
           style={{
             display: "flex",
-            alignContent: "center",
-            alignItems: "center",
+            alignItems: "flex-end",
+            justifyContent: "flex-end",
+            marginTop: isMobile ? 40 : 0,
           }}
         >
-          <Button type="submit" variant="contained" color="primary">
-            {loading ? (
-              <CircularProgress color="warning" size={24} />
-            ) : (
-              "PUBLICAR"
-            )}
-          </Button>
+          {/* <Button variant="contained" color="info" onClick={handleOpenAlert}>
+          APLICAR DESCUENTO
+        </Button> */}
         </div>
-      </Grid>
-      {number && <p>Entered number: {number}</p>}
-      <AlertComponent
-        isOpen={isAlertOpen}
-        onClose={handleCloseAlert}
-        onConfirm={handleConfirmAlert}
-      />
-      <Alert
-        open={open}
-        message={"Seguro que desea borrar este valor?"}
-        onClose={handleCloses}
-        onConfirm={handleConfirm}
-      />
-      <Drawer anchor="right" open={drawerOpen} onClose={handleDrawerClose}>
-        <Box sx={{ width: 300, padding: 2 }}>
-          <Typography variant="h6" gutterBottom>
-            {drawerType === "color" ? "Nuevo Color" : "Nueva Talla"}
+
+        <div style={{ margin: 10 }}>
+          <Typography variant="subtitle1" gutterBottom>
+            Colores
           </Typography>
+          {chipscolor.map((chip, index) => (
+            <Chip
+              key={index}
+              label={chip.label}
+              style={{ margin: 3 }}
+              onClick={() => handleDrawerOpen("color", chip)}
+              onDelete={() => handleDeleteChip(chip, "color")}
+            />
+          ))}
+          <IconButton color="primary" onClick={() => handleDrawerOpen("color")}>
+            <AddIcon />
+          </IconButton>
+        </div>
+        <div style={{ margin: 10 }}>
+          <Typography variant="subtitle1" gutterBottom>
+            Tallas
+          </Typography>
+          {chips.map((chip, index) => (
+            <Chip
+              label={`${chip.label} : ${chip.precio}`}
+              style={{ margin: 3 }}
+              onClick={() => handleDrawerOpen("talla", chip)}
+              onDelete={() => handleDeleteChip(chip, "talla")}
+            />
+          ))}
+          <IconButton color="primary" onClick={() => handleDrawerOpen("talla")}>
+            <AddIcon />
+          </IconButton>
+        </div>
 
-          {/* Siempre habilitado */}
-          <TextField
-            label={drawerType === "color" ? "Color" : "Talla"}
-            value={newColor}
-            onChange={(e) => setNewColor(e.target.value)}
-            fullWidth
-            margin="normal"
-          />
-
-          {/* Solo habilitado si es tipo con precio */}
-          {drawerType === "talla" && (
+        <Grid container spacing={2} marginTop={isMobile ? 5 : 0}>
+          <Grid item xs={12}>
             <TextField
-              label="Precio"
+              label="Title"
+              variant="outlined"
+              value={title}
+              onChange={handleTitleChange}
+              required
+              fullWidth
+            />
+          </Grid>
+
+          <Grid item xs={12}>
+            <TextField
+              label="Price"
+              variant="outlined"
               type="number"
-              value={newPrice}
-              onChange={(e) => setNewPrice(e.target.value)}
+              value={price}
+              onChange={handlePriceChange}
+              required
+              fullWidth
+            />
+          </Grid>
+          {contexto === "Nacional" && (
+            <Box display="flex" alignItems="flex-end" marginY={1} margin={1}>
+              <TextField
+                label="Cantidad"
+                type="number"
+                value={cantidad}
+                onChange={handleCantidad}
+                style={{ marginLeft: "8px" }}
+              />
+              <div style={{ margin: 10, marginLeft: 30 }}>
+                <FormControlLabel
+                  control={
+                    <Switch checked={stock} onChange={handleToggleChange} />
+                  }
+                  label="Stock"
+                />
+              </div>
+            </Box>
+          )}
+
+          <Grid item xs={12}>
+            <TextField
+              label="Details"
+              variant="outlined"
+              multiline
+              rows={4}
+              value={details}
+              onChange={handleDetailsChange}
+              required
+              fullWidth
+            />
+          </Grid>
+
+          <div
+            style={{
+              display: "flex",
+              alignContent: "center",
+              alignItems: "center",
+            }}
+          >
+            <Button type="submit" variant="contained" color="primary">
+              PUBLICAR
+            </Button>
+          </div>
+        </Grid>
+        {number && <p>Entered number: {number}</p>}
+        <AlertComponent
+          isOpen={isAlertOpen}
+          onClose={handleCloseAlert}
+          onConfirm={handleConfirmAlert}
+        />
+        <Alert
+          open={open}
+          message={"Seguro que desea borrar este valor?"}
+          onClose={handleCloses}
+          onConfirm={handleConfirm}
+        />
+        <Drawer anchor="right" open={drawerOpen} onClose={handleDrawerClose}>
+          <Box sx={{ width: 300, padding: 2 }}>
+            <Typography variant="h6" gutterBottom>
+              {drawerType === "color" ? "Nuevo Color" : "Nueva Talla"}
+            </Typography>
+
+            {/* Siempre habilitado */}
+            <TextField
+              label={drawerType === "color" ? "Color" : "Talla"}
+              value={newColor}
+              onChange={(e) => setNewColor(e.target.value)}
               fullWidth
               margin="normal"
             />
-          )}
 
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={handleSaveNew}
-            sx={{ mt: 2 }}
-            fullWidth
-          >
-            Guardar
-          </Button>
-        </Box>
-      </Drawer>
-    </Box>
+            {/* Solo habilitado si es tipo con precio */}
+            {drawerType === "talla" && (
+              <TextField
+                label="Precio"
+                type="number"
+                value={newPrice}
+                onChange={(e) => setNewPrice(e.target.value)}
+                fullWidth
+                margin="normal"
+              />
+            )}
+
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={handleSaveNew}
+              sx={{ mt: 2 }}
+              fullWidth
+            >
+              Guardar
+            </Button>
+          </Box>
+        </Drawer>
+      </Box>
+    </>
   );
 };
 

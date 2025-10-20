@@ -208,7 +208,20 @@ const Publicar = () => {
   const [selectedsubCategoria, setSelectedSubCategoria] = useState(null);
   const [selectedCategoria, setSelectedCategoria] = useState(null);
   const [selectedGender, setSelectedGender] = useState(null);
-  let MARGEN = 1.3;
+
+  const MARGEN = (preciobase) => {
+    if (preciobase <= 7000) {
+      return preciobase * 1.3 + 1500;
+    } else if (preciobase <= 25000) {
+      return preciobase * 1.22 + 1000;
+    } else if (preciobase <= 250000) {
+      return preciobase * 1.15;
+    } else if (preciobase <= 500000) {
+      return preciobase * 1.12;
+    } else {
+      return preciobase * 1.08 + 100000;
+    }
+  };
 
   let categ = "Moda & Accesorios"; //Categoria
   let country = "China";
@@ -552,10 +565,10 @@ const Publicar = () => {
     const data = {
       Titulo: title,
       Ttoken: tokens,
-      Categoria: categ,
+      Categoria: selectedCategoria,
       Subcategoria: selectedsubCategoria, // Baño
       Codigo: codigo,
-      Precio: parseInt(price * MARGEN + 1500),
+      Precio: parseInt(MARGEN(price)),
       Peso: selectedPeso,
       Dimension: selectedDimension || "Paquete mediano",
       Detalles: details,
@@ -835,7 +848,7 @@ const Publicar = () => {
       const sizeData = {
         id: sizeId,
         label: size,
-        precio: prices[size] > 0 ? parseInt(prices[size] * MARGEN + 1500) : 0,
+        precio: prices[size] > 0 ? parseInt(MARGEN(prices[size])) : 0,
       };
       sizesNode.push(sizeData);
 
