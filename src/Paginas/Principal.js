@@ -40,7 +40,7 @@ const Principal = ({ email, logout }) => {
     if (user === "admin") return true;
 
     // Si es 01 → mostrar MaisaProd y Publicar
-    if (user === "01" || user === "001" || user === "1") {
+    if (user === "01" || user === "001" || user === "1" || user === "11") {
       return ["Publicados", "Publicar"].includes(item.name);
     }
 

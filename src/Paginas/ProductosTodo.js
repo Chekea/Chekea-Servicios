@@ -161,6 +161,8 @@ const ProductoTodo = () => {
           nombre = "Maysa";
         } else if (userName === "001") {
           nombre = "Vicky";
+        } else if (userName === "11") {
+          nombre = "Esteban";
         } else {
           console.log("Usuario no válido");
           return;

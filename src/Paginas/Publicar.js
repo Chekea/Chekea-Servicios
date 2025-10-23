@@ -61,73 +61,41 @@ const categorias = [
       "Pantalones",
       "Calzado",
       "Camisas",
-      "Ropa Interior",
-      "Accesorios",
+      "Otros",
     ],
   },
   {
     nombre: "Complementos para peques",
-    subcategorias: [
-      "Bebés",
-      "Niños",
-      "Juguetes",
-      "Moda",
-      "Carritos",
-      "Mochilas",
-      "Accesorios",
-    ],
+    subcategorias: ["Bebés", "Niños", "Juguetes", "Moda", "Otros"],
   },
   {
     nombre: "Deporte",
-    subcategorias: ["Ropa", "Calzado", "Accesorios", "Gimnasio"],
+    subcategorias: ["Ropa", "Calzado", "Otros", "Gimnasio"],
   },
   {
     nombre: "Electrónica",
-    subcategorias: [
-      "Móviles",
-      "Tablets",
-      "Ordenadores",
-      "Auriculares",
-      "Televisores",
-      "Cámaras",
-      "Drones",
-    ],
+    subcategorias: ["Drones", "Tablets", "Electrodomesticos", "Camaras"],
   },
   {
+    nombre: "Muebles",
+    subcategorias: ["Sofas", "Mesas", "Sillas", "Armarios", "Camas"],
+  },
+  {
+    nombre: "Transporte",
+    subcategorias: ["Patin", "Scooter", "Deportivas"],
+  },
+
+  {
     nombre: "Belleza & Accesorios",
-    subcategorias: [
-      "Maquillaje",
-      "Cabello",
-      "Piel",
-      "Uñas",
-      "Cremas",
-      "Cepillos",
-      "Accesorios",
-    ],
+    subcategorias: ["Maquillaje", "Pelo", "Joyas", "Otros"],
   },
   {
     nombre: "Hogar",
-    subcategorias: [
-      "Accesorios",
-      "Cocina",
-      "Baño",
-      "Decoración",
-      "Limpieza",
-      "Jardín",
-      "Iluminación",
-    ],
+    subcategorias: ["Otros", "Cocina", "Baño", "Decoración"],
   },
   {
     nombre: "Otros",
-    subcategorias: [
-      "Mascotas",
-      "Viajes",
-      "Oficina",
-      "Arte",
-      "Música",
-      "Regalos",
-      "Accesorios",
-    ],
+    subcategorias: ["Auriculares", "Smartwatch", "Accesorios"],
   },
 ];
 
@@ -255,7 +223,7 @@ const Publicar = () => {
       1: ["Belleza & Accesorios", "Deporte"],
       "001": ["Hogar", "Otros"],
 
-      admin: ["Electrónica", "Hogar"],
+      11: ["Electrónica", "Muebles", "Transporte"],
     };
 
     // Si el usuario tiene permisos definidos
@@ -699,6 +667,7 @@ const Publicar = () => {
         1: "Asly",
         "01": "Maysa",
         "001": "Vicky",
+        11: "Esteban",
       };
 
       const nombreCampo = userMap[username];
