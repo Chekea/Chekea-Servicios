@@ -91,11 +91,18 @@ const categorias = [
   },
   {
     nombre: "Hogar",
-    subcategorias: ["Otros", "Cocina", "Baño", "Decoración"],
+    subcategorias: [
+      "Otros",
+      "Cocina",
+      "Sala de estar",
+      "Baño",
+      "Decoración",
+      "Iluminacion",
+    ],
   },
   {
     nombre: "Otros",
-    subcategorias: ["Auriculares", "Smartwatch", "Accesorios"],
+    subcategorias: ["Auriculares", "Smartwatch", "Otros"],
   },
 ];
 
