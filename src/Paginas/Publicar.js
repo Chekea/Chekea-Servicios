@@ -810,8 +810,6 @@ const Publicar = () => {
         colorData
       );
 
-      // Guardar en filtros para consultas rápidas
-      // await setDoc(doc(db, `filtros/color/${color}/${codigo}`), { codigo });
     }
     return colorsNode;
   };
@@ -832,9 +830,7 @@ const Publicar = () => {
       // Guardar en subcolección
       await setDoc(doc(db, `productos/${codigo}/tallas/${sizeId}`), sizeData);
 
-      // Guardar en filtros para consultas rápidas
-      // await setDoc(doc(db, `filtros/talla/${size}/${codigo}`), { codigo });
-    }
+     }
     return sizesNode;
   };
 

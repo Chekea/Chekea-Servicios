@@ -31,9 +31,7 @@ import {
   collection,
   query,
   orderBy,
-  startAfter,
   limit,
-  updateDoc,
   doc,
   getDocs,
   where,
@@ -82,7 +80,12 @@ const ProductoTodo = () => {
 
       filtros.push(where("Vendedor", "==", userName));
 
-      let q = query(productosRef, orderBy("Fecha", "desc"), ...filtros);
+      let q = query(
+        productosRef,
+        orderBy("Fecha", "desc"),
+        ...filtros,
+        limit(4)
+      );
       const querySnapshot = await getDocs(q);
 
       const productosFiltrados = querySnapshot.docs.map((doc) => ({
