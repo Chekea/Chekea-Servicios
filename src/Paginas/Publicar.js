@@ -780,14 +780,17 @@ const Publicar = () => {
   };
   // Función para separar las imágenes en principal, real, paquete y extras
   const separateImages = (imageUrls) => {
-    if (imageUrls.length < 3)
-      throw new Error("Se necesitan al menos 3 imágenes.");
+    if (!Array.isArray(imageUrls) || imageUrls.length === 0) {
+      throw new Error("Debes proporcionar al menos una imagen.");
+    }
 
+    // Si hay menos de 3 imágenes → no se excluye nada
+    if (imageUrls.length === 1) {
+      return { principal: imageUrls, extraImages: imageUrls };
+    }
+
+    // Si hay 3 o más imágenes → se excluye la primera
     const principal = imageUrls[0];
-    // const real = imageUrls[imageUrls.length - 2];
-    // const paquete = imageUrls[imageUrls.length - 1];
-
-    // Todas las demás imágenes excluyendo principal, real y paquete
     const extraImages = imageUrls.slice(1);
 
     return { principal, extraImages };
@@ -812,8 +815,6 @@ const Publicar = () => {
     }
     return colorsNode;
   };
-
-  console.log("HOALA MUDNO CRUEL");
 
   // Crear subcolección de tallas
   const createSizesNode = async (codigo, chips, prices) => {
@@ -840,8 +841,8 @@ const Publicar = () => {
   // Subir imágenes extras a subcolección
   const uploadExtraImages = async (codigo, extraImages) => {
     for (const url of extraImages) {
-      const imgId = doc(collection(db, `productos/${codigo}/imagenesExtra`)).id;
-      await setDoc(doc(db, `productos/${codigo}/imagenesExtra/${imgId}`), {
+      const imgId = doc(collection(db, `productos/${codigo}/imagenes`)).id;
+      await setDoc(doc(db, `productos/${codigo}/imagenes/${imgId}`), {
         id: imgId,
         url,
       });
@@ -855,11 +856,20 @@ const Publicar = () => {
 
     try {
       // Validación mínima de imágenes
-      if (images.length < 3) {
-        throw new Error(
-          "Cuidado!!!, Se necesitan al menos 3 imágenes para continuar."
-        );
+      if (selectedsubCategoria === "Pelo") {
+        if (images.length === 0) {
+          throw new Error(
+            "Cuidado!!!, Se necesitan al menos 1 imágen para continuar."
+          );
+        }
+      } else {
+        if (images.length < 3) {
+          throw new Error(
+            "Cuidado!!!, Se necesitan al menos 3 imágenes para continuar."
+          );
+        }
       }
+
       if (!selectedsubCategoria) {
         throw new Error("Cuidado!!!, no haz seleccionado la subcategorias");
       }
@@ -884,27 +894,28 @@ const Publicar = () => {
       const fecha = getCurrentTimeInMilliseconds();
       let commonData = await prepareCommonData(codigo, fecha);
 
-      // Subir todas las imágenes a Storage y obtener URLs
+      // // Subir todas las imágenes a Storage y obtener URLs
       const imageUrls = await uploadImagesToStorage(images);
 
-      // Separar imágenes
+      // // Separar imágenes
       const { principal, real, paquete, extraImages } =
         separateImages(imageUrls);
 
-      // Guardar imágenes especiales en el documento principal
+      // console.log(principal, extraImages);
+      // // Guardar imágenes especiales en el documento principal
       commonData.Imagen = principal;
       // commonData.RealImage = real;
       // commonData.PaqueteImage = paquete;
 
-      // Guardar producto principal
+      // // Guardar producto principal
       await setDoc(newItemRef, commonData);
 
-      // Guardar imágenes extra en subcolección
+      // // Guardar imágenes extra en subcolección
       if (extraImages.length > 0) {
         await uploadExtraImages(codigo, extraImages);
       }
 
-      // Guardar colores y tallas
+      // // Guardar colores y tallas
       if (chipscolor.length > 0) await createColorsNode(codigo, chipscolor);
       if (chips.length > 0) await createSizesNode(codigo, chips, prices);
 
