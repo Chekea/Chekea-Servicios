@@ -84,7 +84,7 @@ const ProductoTodo = () => {
         productosRef,
         orderBy("Fecha", "desc"),
         ...filtros,
-        limit(4)
+        limit(7)
       );
       const querySnapshot = await getDocs(q);
 

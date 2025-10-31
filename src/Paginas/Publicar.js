@@ -809,7 +809,6 @@ const Publicar = () => {
         doc(db, `productos/${codigo}/colores/${colorId}`),
         colorData
       );
-
     }
     return colorsNode;
   };
@@ -829,8 +828,7 @@ const Publicar = () => {
 
       // Guardar en subcolección
       await setDoc(doc(db, `productos/${codigo}/tallas/${sizeId}`), sizeData);
-
-     }
+    }
     return sizesNode;
   };
 
@@ -840,7 +838,7 @@ const Publicar = () => {
       const imgId = doc(collection(db, `productos/${codigo}/imagenes`)).id;
       await setDoc(doc(db, `productos/${codigo}/imagenes/${imgId}`), {
         id: imgId,
-        url,
+        Imagen: url,
       });
     }
   };
