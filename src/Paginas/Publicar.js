@@ -55,7 +55,6 @@ const categorias = [
     nombre: "Moda & Accesorios",
     subcategorias: [
       "Trajes",
-      "Faldas",
       "Vestidos",
       "Bolsos",
       "Pantalones",
@@ -66,7 +65,7 @@ const categorias = [
   },
   {
     nombre: "Complementos para peques",
-    subcategorias: ["Bebés", "Niños", "Juguetes", "Moda", "Otros"],
+    subcategorias: ["Bebés", "Niños", "Moda", "Otros"],
   },
   {
     nombre: "Deporte",
@@ -226,9 +225,9 @@ const Publicar = () => {
     const user = username.trim().toLowerCase();
 
     const permisos = {
-      "01": ["Moda & Accesorios", "Complementos para peques"],
-      1: ["Belleza & Accesorios", "Deporte"],
-      "001": ["Hogar", "Otros"],
+      "01": ["Hogar", "Otros"],
+      1: ["Belleza & Accesorios", "Moda & Accesorios"],
+      "001": ["Complementos para peques", "Deporte"],
 
       11: ["Electrónica", "Muebles", "Transporte"],
     };

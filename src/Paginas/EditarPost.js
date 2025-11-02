@@ -383,6 +383,85 @@ const EditarPost = () => {
     { label: "Maritima", value: "Maritima" },
   ];
 
+  const confirmarEliminacion = (codigo) => {
+    if (!codigo) {
+      alert("Código del producto no válido.");
+      return false;
+    }
+    console.log(codigo, "wettin");
+    return window.confirm(
+      "¿Seguro que quieres eliminar este producto y todas sus imágenes?"
+    );
+  };
+
+  const eliminarDocumentoFirestore = async (codigo) => {
+    const db = getFirestore(app);
+    const ref = doc(db, "productos", codigo);
+    await deleteDoc(ref);
+    console.log("✅ Documento eliminado de Firestore");
+  };
+
+  const eliminarPostCompleto = async () => {
+    if (!confirmarEliminacion(codigo)) return;
+
+    setLoading(true);
+    try {
+      const producto = await obtenerProducto(codigo);
+      const imagenes = producto.Imagenes || [];
+
+      await eliminarImagenes(imagenes);
+      await eliminarDocumentoFirestore(codigo);
+
+      alert("✅ Producto y sus imágenes eliminados correctamente.");
+      navigate("/");
+    } catch (error) {
+      console.error("❌ Error al eliminar:", error);
+      alert("Error eliminando el producto: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const obtenerProducto = async (codigo) => {
+    const db = getFirestore(app);
+    const productoRef = doc(db, "productos", codigo);
+    const productoSnap = await getDoc(productoRef);
+
+    if (!productoSnap.exists()) {
+      throw new Error("El producto no existe en Firestore.");
+    }
+
+    return productoSnap.data();
+  };
+
+  const eliminarImagenes = async (imagenes = []) => {
+    const storage = getStorage(app);
+
+    for (const imgPath of imagenes) {
+      try {
+        const path = imgPath.startsWith("https")
+          ? getPathFromUrl(imgPath)
+          : imgPath;
+
+        const imgRef = storageRef(storage, path);
+        await deleteObject(imgRef);
+        console.log(`🗑 Imagen eliminada: ${path}`);
+      } catch (error) {
+        console.warn(`No se pudo eliminar la imagen ${imgPath}:`, error);
+      }
+    }
+  };
+
+  // Helper para convertir URL → ruta interna del Storage
+  const getPathFromUrl = (url) => {
+    try {
+      const parts = url.split("?")[0].split("/o/")[1];
+      return decodeURIComponent(parts);
+    } catch {
+      return null;
+    }
+  };
+
   useEffect(() => {
     const fetchData = async (codigo) => {
       try {
@@ -504,6 +583,7 @@ const EditarPost = () => {
 
       <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2, padding: 2 }}>
         <Cabezal texto={"Editar"} />
+
         <div
           style={{
             display: "flex",
@@ -512,11 +592,18 @@ const EditarPost = () => {
             marginTop: isMobile ? 40 : 0,
           }}
         >
-          {/* <Button variant="contained" color="info" onClick={handleOpenAlert}>
-          APLICAR DESCUENTO
-        </Button> */}
-        </div>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={eliminarPostCompleto}
+          >
+            ELIMINAR PRODUCTO
+          </Button>
 
+          <Button variant="contained" color="info" onClick={handleOpenAlert}>
+            APLICAR DESCUENTO
+          </Button>
+        </div>
         <div style={{ margin: 10 }}>
           <Typography variant="subtitle1" gutterBottom>
             Colores
