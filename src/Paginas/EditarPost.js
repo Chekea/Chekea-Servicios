@@ -161,7 +161,7 @@ const EditarPost = () => {
   const handleDrawerClose = () => setDrawerOpen(false);
   const MARGEN = (preciobase) => {
     if (preciobase <= 7000) {
-      return preciobase * 1.3 + 1500;
+      return preciobase > 0 ? preciobase * 1.3 + 1500 : 0;
     } else if (preciobase <= 25000) {
       return preciobase * 1.22 + 1000;
     } else if (preciobase <= 250000) {

@@ -41,30 +41,133 @@ import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import axios from "axios";
 
+// Cache key específica para este componente
+const PRODUCT_CACHE_KEY = "productoTodo_complete_cache";
+
 const ProductoTodo = () => {
   const location = useLocation();
   const userName = location.state?.userName || "";
-  console.log(userName);
-  const [products, setProducts] = useState([]);
-  const [selectedChip, setSelectedChip] = useState("Nacional");
-  const [lastDoc, setLastDoc] = useState(null);
-  const [hasMore, setHasMore] = useState(true);
-  const [images, setImages] = useState([]);
+
+  // Estado para controlar si ya se cargó desde caché
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
+
+  // 🎯 CARGAR ESTADO COMPLETO DESDE CACHÉ
+  const loadCompleteStateFromCache = () => {
+    try {
+      const cached = sessionStorage.getItem(PRODUCT_CACHE_KEY);
+      if (cached) {
+        const { data, timestamp, userName: cachedUser } = JSON.parse(cached);
+
+        // Verificar si el caché es del mismo usuario y no tiene más de 30 minutos
+        const isExpired = Date.now() - timestamp > 30 * 60 * 1000;
+        const isSameUser = cachedUser === userName;
+
+        if (!isExpired && isSameUser) {
+          console.log("📦 Cargando estado completo desde caché");
+          return data;
+        } else {
+          sessionStorage.removeItem(PRODUCT_CACHE_KEY);
+        }
+      }
+    } catch (error) {
+      console.error("Error cargando caché completo:", error);
+    }
+    return null;
+  };
+
+  // 💾 GUARDAR ESTADO COMPLETO EN CACHÉ
+  const saveCompleteStateToCache = (state) => {
+    try {
+      const cacheData = {
+        data: state,
+        timestamp: Date.now(),
+        userName: userName,
+      };
+      sessionStorage.setItem(PRODUCT_CACHE_KEY, JSON.stringify(cacheData));
+      console.log("💾 Estado completo guardado en caché");
+    } catch (error) {
+      console.error("Error guardando estado completo en caché:", error);
+    }
+  };
+
+  // 🧹 LIMPIAR CACHÉ
+  const clearCache = () => {
+    sessionStorage.removeItem(PRODUCT_CACHE_KEY);
+    sessionStorage.removeItem("productoTodoState");
+    console.log("🗑️ Caché limpiado");
+  };
+
+  // Estados iniciales desde caché si existe
+  const cachedState = loadCompleteStateFromCache();
+
+  const [products, setProducts] = useState(cachedState?.products || []);
+  const [selectedChip, setSelectedChip] = useState(
+    cachedState?.selectedChip || "Nacional"
+  );
+  const [lastDoc, setLastDoc] = useState(cachedState?.lastDoc || null);
+  const [hasMore, setHasMore] = useState(cachedState?.hasMore ?? true);
+  const [images, setImages] = useState(cachedState?.images || []);
   const [loading, setLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [confirmedSearch, setConfirmedSearch] = useState("");
+  const [searchTerm, setSearchTerm] = useState(cachedState?.searchTerm || "");
+  const [confirmedSearch, setConfirmedSearch] = useState(
+    cachedState?.confirmedSearch || ""
+  );
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [searchName, setSearchName] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
-  const [priceRange, setPriceRange] = useState([0, 0]);
-  const [productos, setProductos] = useState([]);
-  const [selectedLocation, setSelectedLocation] = useState("China");
-  const [nombre, setNombre] = useState("");
+  const [searchName, setSearchName] = useState(cachedState?.searchName || "");
+  const [selectedCategory, setSelectedCategory] = useState(
+    cachedState?.selectedCategory || ""
+  );
+  const [priceRange, setPriceRange] = useState(
+    cachedState?.priceRange || [0, 0]
+  );
+  const [productos, setProductos] = useState(cachedState?.productos || []);
+  const [selectedLocation, setSelectedLocation] = useState(
+    cachedState?.selectedLocation || "China"
+  );
+  const [nombre, setNombre] = useState(cachedState?.nombre || "");
+
   console.log("Productos cargados:", products);
+
   const handleCloseDrawer = () => {
     setDrawerOpen(false);
   };
-  // hola mundo cruel
+
+  // 🔄 GUARDAR ESTADO COMPLETO CUANDO CAMBIE ALGUNA DEPENDENCIA IMPORTANTE
+  useEffect(() => {
+    if (initialLoadDone) {
+      const completeState = {
+        products,
+        selectedChip,
+        lastDoc,
+        hasMore,
+        images,
+        searchTerm,
+        confirmedSearch,
+        searchName,
+        selectedCategory,
+        priceRange,
+        productos,
+        selectedLocation,
+        nombre,
+      };
+      saveCompleteStateToCache(completeState);
+    }
+  }, [
+    products,
+    selectedChip,
+    lastDoc,
+    hasMore,
+    images,
+    searchTerm,
+    confirmedSearch,
+    searchName,
+    selectedCategory,
+    priceRange,
+    productos,
+    selectedLocation,
+    nombre,
+    initialLoadDone,
+  ]);
 
   async function maisaprod(
     searchName,
@@ -96,7 +199,6 @@ const ProductoTodo = () => {
       const lastVisibleDoc =
         querySnapshot.docs[querySnapshot.docs.length - 1] || null;
 
-      // ✅ Extraer la cantidad de productos
       const totalProductos = querySnapshot.size;
       console.log("Cantidad de productos encontrados:", totalProductos);
 
@@ -111,7 +213,6 @@ const ProductoTodo = () => {
     }
   }
 
-  // hola maysa
   async function buscarProductos(
     searchName,
     selectedCategory,
@@ -125,7 +226,6 @@ const ProductoTodo = () => {
       let filtros = [];
 
       filtros.push(where("Categoria", "==", "Otros"));
-      // filtros.push(where("Vendedor", "==", "y7eJBoQ23feGEF3HAF2sZxpDKig1"));
       filtros.push(where("Pais", "==", "China"));
 
       let q = query(productosRef, orderBy("Precio", "asc"), ...filtros);
@@ -150,7 +250,6 @@ const ProductoTodo = () => {
 
   async function handleCantidad() {
     try {
-      // Referencia al documento "asly"
       const aslyRef = doc(db, "GE_Info", "Nombres");
       const snapshot = await getDoc(aslyRef);
 
@@ -180,11 +279,23 @@ const ProductoTodo = () => {
       console.error("Error al leer el documento:", error);
     }
   }
-  const handleConfirmSearch = async () => {
+
+  const handleConfirmSearch = async (useCache = true) => {
+    // Si ya tenemos productos en caché y queremos usar el caché, no hacer nada
+    if (useCache && products.length > 0 && cachedState) {
+      console.log("✅ Usando datos en caché, evitando llamada a Firestore");
+      setInitialLoadDone(true);
+      return;
+    }
+
     setLoading(true);
-    setProducts([]);
-    setLastDoc(null);
-    setHasMore(true);
+
+    // Solo limpiar si es una búsqueda nueva
+    if (!useCache) {
+      setProducts([]);
+      setLastDoc(null);
+      setHasMore(true);
+    }
 
     const { productosFiltrados, lastVisibleDoc } = await maisaprod(
       searchName,
@@ -196,16 +307,28 @@ const ProductoTodo = () => {
     setProducts(productosFiltrados);
     setLastDoc(lastVisibleDoc);
     setHasMore(!!lastVisibleDoc);
+    setInitialLoadDone(true);
     setLoading(false);
   };
 
   useEffect(() => {
     handleCantidad();
+
+    // Si hay caché, marcar como cargado sin hacer llamadas
+    if (cachedState) {
+      console.log(
+        "🚀 Estado cargado desde caché, evitando llamadas a Firestore"
+      );
+      setInitialLoadDone(true);
+    } else {
+      // Solo hacer la búsqueda si no hay caché
+      handleConfirmSearch(false);
+    }
   }, []);
 
   const abrirFiltros = async () => {
     setDrawerOpen(false);
-    await handleConfirmSearch();
+    await handleConfirmSearch(false);
   };
 
   const loadMore = async () => {
@@ -220,7 +343,8 @@ const ProductoTodo = () => {
       lastDoc
     );
 
-    setProducts((prev) => [...prev, ...productosFiltrados]);
+    const newProducts = [...products, ...productosFiltrados];
+    setProducts(newProducts);
     setLastDoc(lastVisibleDoc);
     setHasMore(!!lastVisibleDoc);
     setLoading(false);
@@ -232,13 +356,30 @@ const ProductoTodo = () => {
   const db = getFirestore(app);
 
   const HANDLEDETALES = (codigo) => {
+    // Guardar estado actual antes de navegar
+    const currentState = {
+      products,
+      selectedChip,
+      lastDoc,
+      hasMore,
+      images,
+      searchTerm,
+      confirmedSearch,
+      searchName,
+      selectedCategory,
+      priceRange,
+      productos,
+      selectedLocation,
+      nombre,
+    };
+    saveCompleteStateToCache(currentState);
     navigate(`/Buscar/Editar/${codigo}/Exterior`);
   };
-  //EIBY
-  // 🧠 Restore saved state on mount
+
+  // 🧠 Restore saved state on mount - ya no es necesario porque usamos cachedState inicial
   useEffect(() => {
     const savedState = sessionStorage.getItem("productoTodoState");
-    if (savedState) {
+    if (savedState && !cachedState) {
       const parsed = JSON.parse(savedState);
       setProducts(parsed.products || []);
       setSelectedCategory(parsed.selectedCategory || "");
@@ -247,87 +388,8 @@ const ProductoTodo = () => {
       setSearchName(parsed.searchName || "");
       setLastDoc(parsed.lastDoc || null);
       setHasMore(parsed.hasMore ?? true);
-    } else {
-      // buscarProductos();
     }
-  }, []);
-
-  // codigo real
-  //   async function buscarProductos(
-  //   searchName,
-  //   selectedCategory,
-  //   priceRange,
-  //   selectedCountry, // nuevo parámetro
-  //   lastVisible = null,
-  //   pageSize = 12
-  // ) {
-  //   try {
-  //     const productosRef = collection(db, "productos");
-  //     let filtros = [];
-
-  //     console.log(
-  //       "Buscar productos con:",
-  //       searchName,
-  //       selectedCategory,
-  //       priceRange,
-  //       selectedCountry
-  //     );
-
-  //     // 🔹 Filtrar por tokens si hay texto
-  //     if (searchName.trim() !== "") {
-  //       const searchTokens = searchName.toLowerCase().split(" ");
-  //       filtros.push(where("Ttoken", "array-contains-any", searchTokens));
-  //       filtros.push(where("Pais", "==", selectedCountry));
-  //     }
-
-  //     // 🔹 Filtrar por categoría
-  //     if (selectedCategory) {
-  //       filtros.push(where("Categoria", "==", selectedCategory));
-  //     }
-
-  //     // 🔹 Filtrar por precio
-  //     if (priceRange && (priceRange[0] !== 0 || priceRange[1] !== 0)) {
-  //       filtros.push(where("Precio", ">=", priceRange[0]));
-  //       filtros.push(where("Precio", "<=", priceRange[1]));
-  //     }
-
-  //     // 🔹 Base query ordenada por Precio
-  //     let q = query(
-  //       productosRef,
-  //       orderBy("Precio", "asc"),
-  //       ...filtros,
-  //       limit(pageSize)
-  //     );
-
-  //     // 🔹 Continuar desde el último documento (paginación)
-  //     if (lastVisible) {
-  //       q = query(
-  //         productosRef,
-  //         orderBy("Precio", "asc"),
-  //         ...filtros,
-  //         startAfter(lastVisible),
-  //         limit(pageSize)
-  //       );
-  //     }
-
-  //     const querySnapshot = await getDocs(q);
-
-  //     const productosFiltrados = querySnapshot.docs.map((doc) => ({
-  //       id: doc.id,
-  //       ...doc.data(),
-  //     }));
-
-  //     const lastVisibleDoc =
-  //       querySnapshot.docs[querySnapshot.docs.length - 1] || null;
-
-  //     console.log("Productos encontrados:", productosFiltrados);
-
-  //     return { productosFiltrados, lastVisibleDoc };
-  //   } catch (error) {
-  //     console.error("Error buscando productos:", error);
-  //     return { productosFiltrados: [], lastVisibleDoc: null };
-  //   }
-  // }
+  }, [cachedState]);
 
   // 💾 Save state automatically when it changes
   useEffect(() => {
@@ -360,12 +422,6 @@ const ProductoTodo = () => {
   const handleSaveProduct = async (id, product) => {
     try {
       console.log("Guardando producto:", id, product);
-      // const ref = doc(db, "productos", id); // 👈 ajusta "productos" si tu colección se llama diferente
-      // await updateDoc(ref, {
-      //   Precio: Number(product.Precio) || 0,
-      //   Peso: Number(product.Peso) || 0,
-      // });
-
       console.log("✅ Producto actualizado:", id);
       alert("Producto actualizado correctamente");
     } catch (error) {
@@ -400,7 +456,8 @@ const ProductoTodo = () => {
         });
 
         const lastVisibleDoc = snapshot.docs[snapshot.docs.length - 1];
-        setProducts(reset ? productData : [...products, ...productData]);
+        const newProducts = reset ? productData : [...products, ...productData];
+        setProducts(newProducts);
         setLastDoc(lastVisibleDoc);
         setHasMore(snapshot.docs.length === 30);
       } else {
@@ -455,6 +512,18 @@ const ProductoTodo = () => {
   return (
     <Container style={{ marginTop: isMobile ? 65 : 10 }}>
       <Cabezal texto={"Productos"} />
+
+      {/* Indicador de caché */}
+      {cachedState && (
+        <Typography
+          variant="caption"
+          color="primary"
+          sx={{ display: "block", textAlign: "center", mb: 1 }}
+        >
+          📦 Datos cargados desde caché (0 llamadas a Firestore)
+        </Typography>
+      )}
+
       <Typography
         gutterBottom
         variant="h6"
@@ -463,6 +532,7 @@ const ProductoTodo = () => {
       >
         {`Cantidad Publicados (${nombre})`}
       </Typography>
+
       <Box sx={{ display: "flex", justifyContent: "center", my: 2 }}>
         <TextField
           label="Buscar producto..."
@@ -480,14 +550,20 @@ const ProductoTodo = () => {
         >
           Buscar
         </Button>
-        {/* <Button
-          variant="contained"
-          color="primary"
-          onClick={() => setDrawerOpen(true)}
-          sx={{ fontWeight: "bold", height: "56px", marginLeft: 5 }}
+
+        {/* Botón para forzar recarga */}
+        <Button
+          variant="outlined"
+          onClick={() => {
+            clearCache();
+            setInitialLoadDone(false);
+            handleConfirmSearch(false);
+          }}
+          sx={{ fontWeight: "bold", height: "56px", marginLeft: 1 }}
+          title="Forzar recarga de datos"
         >
-          Filtros
-        </Button> */}
+          🔄
+        </Button>
       </Box>
 
       <Box>
@@ -497,16 +573,19 @@ const ProductoTodo = () => {
           </Box>
         )}
 
-        {!loading && products.length === 0 && (
+        {!loading && products.length === 0 && !cachedState && (
           <Typography variant="h6" sx={{ textAlign: "center", my: 4 }}>
             No se encontraron productos
           </Typography>
         )}
 
-        {products.length > 0 && (
+        {(products.length > 0 || cachedState) && (
           <>
             <Grid container spacing={3}>
-              {products.map((product) => (
+              {(products.length > 0
+                ? products
+                : cachedState?.products || []
+              ).map((product) => (
                 <Grid item xs={12} sm={6} md={4} lg={3} key={product.id}>
                   <Card
                     sx={{
@@ -546,7 +625,6 @@ const ProductoTodo = () => {
                       >
                         {product.Titulo}
                       </Typography>
-                      {/* Campo para editar Precio */}
 
                       <Typography
                         variant="h6"
@@ -569,15 +647,6 @@ const ProductoTodo = () => {
                         </Button>
                       </CardActions>
                     }
-                    {/* {product.RealImagen === undefined && (
-                      <Typography
-                        variant="h6"
-                        color="primary"
-                        sx={{ fontWeight: "bold", textAlign: "center", mb: 1 }}
-                      >
-                        No tiene Imagen Real
-                      </Typography>
-                    )} */}
                   </Card>
                 </Grid>
               ))}
@@ -587,7 +656,7 @@ const ProductoTodo = () => {
               <Box sx={{ display: "flex", justifyContent: "center", my: 4 }}>
                 <Button
                   variant="outlined"
-                  // onClick={loadMore}
+                  onClick={loadMore}
                   disabled={loading}
                   startIcon={loading ? <CircularProgress size={20} /> : null}
                   sx={{ fontWeight: "bold" }}
@@ -680,11 +749,12 @@ const ProductoTodo = () => {
               setProducts([]);
               setLastDoc(null);
               setHasMore(true);
-              sessionStorage.removeItem("productoTodoState");
+              clearCache();
               handleCloseDrawer();
             }}
+            sx={{ mt: 1 }}
           >
-            Borrar Filtros
+            Borrar Filtros y Caché
           </Button>
         </Box>
       </Drawer>
