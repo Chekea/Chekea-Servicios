@@ -35,6 +35,7 @@ import {
   getDocs,
   where,
   deleteField,
+  collectionGroup,
 } from "firebase/firestore";
 
 import { capitalizeFirstLetter, compressImage } from "../ayuda";
@@ -253,6 +254,7 @@ const Publicar = () => {
     { nombre: "Caja extra grande", min: 1.201, max: 1.8 },
     { nombre: "Carga pesada", min: 1.801, max: 2.2 },
     { nombre: "Carga industrial", min: 2.201, max: 3.0 },
+    { nombre: "Cama y sofa", min: 3.101, max: 7.0 },
   ];
 
   const [chipOptions, setchipOptions] = useState([]);
@@ -841,6 +843,45 @@ const Publicar = () => {
       });
     }
   };
+  async function migrarUrlAImagen() {
+    console.log("🔄 Migrando url → Imagen...");
+
+    try {
+      // Buscar documentos con campo url
+      const imagenesSnapshot = await getDocs(
+        query(collectionGroup(db, "imagenes"), where("url", "!=", null))
+      );
+
+      console.log(`📸 Encontrados: ${imagenesSnapshot.size} documentos`);
+
+      if (imagenesSnapshot.empty) {
+        console.log("✅ No hay documentos para migrar");
+        return;
+      }
+
+      let actualizados = 0;
+
+      // Actualizar cada documento
+      for (const doc of imagenesSnapshot.docs) {
+        const data = doc.data();
+
+        // Si tiene url pero no tiene Imagen, copiamos el valor
+        if (data.url && !data.Imagen) {
+          await updateDoc(doc.ref, {
+            Imagen: data.url,
+          });
+          actualizados++;
+          console.log(`✅ ${doc.ref.path}`);
+        }
+      }
+
+      console.log(`🎉 Completado: ${actualizados} documentos actualizados`);
+    } catch (error) {
+      console.error("❌ Error:", error);
+    }
+  }
+
+  migrarUrlAImagen();
 
   // Función principal para manejar el submit
   const handleSubmit = async (e) => {
