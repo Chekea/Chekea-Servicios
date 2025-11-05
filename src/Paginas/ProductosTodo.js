@@ -175,7 +175,7 @@ const ProductoTodo = () => {
     priceRange,
     selectedCountry,
     lastVisible = null,
-    pageSize = 12
+    pageSize = 8
   ) {
     try {
       const productosRef = collection(db, "productos");
@@ -187,7 +187,7 @@ const ProductoTodo = () => {
         productosRef,
         orderBy("Fecha", "desc"),
         ...filtros,
-        limit(20)
+        limit(8)
       );
       const querySnapshot = await getDocs(q);
 
@@ -335,19 +335,19 @@ const ProductoTodo = () => {
     if (!hasMore || loading) return;
     setLoading(true);
 
-    const { productosFiltrados, lastVisibleDoc } = await buscarProductos(
-      searchName,
-      selectedCategory,
-      priceRange,
-      selectedLocation,
-      lastDoc
-    );
+    // const { productosFiltrados, lastVisibleDoc } = await buscarProductos(
+    //   searchName,
+    //   selectedCategory,
+    //   priceRange,
+    //   selectedLocation,
+    //   lastDoc
+    // );
 
-    const newProducts = [...products, ...productosFiltrados];
-    setProducts(newProducts);
-    setLastDoc(lastVisibleDoc);
-    setHasMore(!!lastVisibleDoc);
-    setLoading(false);
+    // const newProducts = [...products, ...productosFiltrados];
+    // setProducts(newProducts);
+    // setLastDoc(lastVisibleDoc);
+    // setHasMore(!!lastVisibleDoc);
+    // setLoading(false);
   };
 
   const navigate = useNavigate();

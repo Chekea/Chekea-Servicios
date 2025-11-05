@@ -599,8 +599,8 @@ const EditarPost = () => {
           >
             ELIMINAR PRODUCTO
           </Button>
-
-          <Button variant="contained" color="info" onClick={handleOpenAlert}>
+          {/* handleOpenAlert */}
+          <Button variant="contained" color="info" onClick={() => {}}>
             APLICAR DESCUENTO
           </Button>
         </div>
