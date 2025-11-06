@@ -560,7 +560,7 @@ const Publicar = () => {
     if (country === "Guinea ecuatorial") {
       data.Stock = parseInt(cantidad);
     }
-    if (selectedsubCategoria == "Moda & Accesorios") {
+    if (selectedsubCategoria === "Moda & Accesorios") {
       data.Genero = selectedGender;
     }
 
@@ -881,7 +881,7 @@ const Publicar = () => {
     }
   }
 
-  migrarUrlAImagen();
+  // migrarUrlAImagen();
 
   // Función principal para manejar el submit
   const handleSubmit = async (e) => {
@@ -911,6 +911,10 @@ const Publicar = () => {
       // Validación de peso
       if (!selectedPeso) {
         throw new Error("Cuidado!!!, no haz seleccionado un peso.");
+      }
+
+      if (selectedCategoria === "Moda & Accesorios" && !selectedGender) {
+        throw new Error("Cuidado!!!, no haz seleccionado un género.");
       }
       if (
         (!chipscolor || chipscolor.length === 0) &&
