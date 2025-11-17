@@ -226,9 +226,9 @@ const Publicar = () => {
     const user = username.trim().toLowerCase();
 
     const permisos = {
-      "01": ["Hogar", "Otros"],
+      "01": [, "Complementos para peques", "Otros"],
       1: ["Belleza & Accesorios", "Moda & Accesorios"],
-      "001": ["Complementos para peques", "Deporte"],
+      "001": ["Hogar", "Deporte"],
 
       11: ["Electrónica", "Muebles", "Transporte"],
     };
