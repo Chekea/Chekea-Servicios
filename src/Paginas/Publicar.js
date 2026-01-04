@@ -42,6 +42,8 @@ import {
   uploadBytes,
 } from "firebase/storage";
 import { useLocation } from "react-router";
+import { useNavigate } from "react-router-dom";
+
 
 // -------------------------------
 // Constantes
@@ -179,6 +181,8 @@ const Publicar = () => {
   // user
  const location = useLocation();
 const userName = location.state?.userName || "";
+const navigate = useNavigate();
+
  
 
   // ---------- Form states ----------
@@ -233,6 +237,8 @@ const userName = location.state?.userName || "";
       .replace(/[\u0300-\u036f]/g, "")
       .replace(/[^\w\s]/gi, "");
   }
+
+  
 
   // País/origen fijos (como tu código)
   const country = "China";
@@ -634,11 +640,14 @@ const userName = location.state?.userName || "";
       setImagenesReales(urls);
       setRealImages([]);
       setRealMsg("✅ Imágenes reales subidas correctamente.");
+      navigate(-1); // vuelve a la página anterior
+
     } catch (e) {
       console.error("❌ Error subiendo imágenes reales:", e);
       setRealMsg("❌ Error subiendo imágenes reales: " + (e?.message ?? "desconocido"));
     } finally {
       setSavingReal(false);
+      
     }
   }, [codigoCreado, realImages, uploadRealImageFile, db, videoLinkReal]);
 
