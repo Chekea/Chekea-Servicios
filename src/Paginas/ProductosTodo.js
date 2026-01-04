@@ -37,9 +37,7 @@ import {
   where,
   getDoc,
 } from "firebase/firestore";
-import ExcelJS from "exceljs";
-import { saveAs } from "file-saver";
-import axios from "axios";
+ 
 
 // Cache keys
 const PRODUCT_CACHE_KEY = "productoTodo_complete_cache";

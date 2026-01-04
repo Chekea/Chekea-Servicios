@@ -18,7 +18,7 @@ import {
 const items = [
   { name: "Compras", link: "/Nacional" },
   { name: "Publicados", link: "/Buscar" },
-  { name: "Aslyprod", link: "/Buscar" },
+  { name: "Modulo", link: "/Ajustes" },
 
   { name: "Publicar", link: "/Publicar" },
   { name: "Farmacias", link: "/Farmacias" },
@@ -41,7 +41,7 @@ const Principal = ({ email, logout }) => {
 
     // Si es 01 → mostrar MaisaProd y Publicar
     if (user === "01" || user === "001" || user === "1" || user === "11") {
-      return ["Publicados", "Publicar"].includes(item.name);
+      return ["Publicados", "Publicar",'Modulo'].includes(item.name);
     }
 
     // Si es 001 → mostrar Compras y Exterior

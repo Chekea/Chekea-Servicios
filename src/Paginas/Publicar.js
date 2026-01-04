@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Box,
   IconButton,
@@ -9,41 +9,32 @@ import {
   Button,
   Grid,
   CircularProgress,
-  Snackbar,
-  Alert,
+  Stack,
+  Alert as MUIAlert,
+  Divider,
 } from "@mui/material";
 import AddAPhotoIcon from "@mui/icons-material/AddAPhoto";
-import {
-  get,
-  ref,
-  getDatabase,
-  push,
-  set,
-  query,
-  orderByKey,
-  startAt,
-} from "firebase/database";
+
+import { get, ref, getDatabase } from "firebase/database";
 import {
   getFirestore,
   collection,
   doc,
   setDoc,
-  addDoc,
-  limit,
   getDoc,
   updateDoc,
   getDocs,
   where,
   deleteField,
   collectionGroup,
+  query as fsQuery,
 } from "firebase/firestore";
 
 import { capitalizeFirstLetter, compressImage } from "../ayuda";
 import app from "./../Servicios/firebases";
 
 import Cabezal from "./componentes/Cabezal";
-import axios from "axios";
-import * as XLSX from "xlsx";
+
 import {
   getDownloadURL,
   getStorage,
@@ -51,74 +42,30 @@ import {
   uploadBytes,
 } from "firebase/storage";
 import { useLocation } from "react-router";
-const categorias = [
-  {
-    nombre: "Moda & Accesorios",
-    subcategorias: [
-      "Trajes",
-      "Vestidos",
-      "Bolsos",
-      "Pantalones",
-      "Calzado",
-      "Camisas",
-      "Otros",
-    ],
-  },
-  {
-    nombre: "Complementos para peques",
-    subcategorias: ["Bebés", "Niños", "Moda", "Otros"],
-  },
-  {
-    nombre: "Deporte",
-    subcategorias: ["Ropa", "Calzado", "Otros", "Gimnasio"],
-  },
-  {
-    nombre: "Electrónica",
-    subcategorias: ["Drones", "Tablets", "Electrodomesticos", "Camaras"],
-  },
-  {
-    nombre: "Muebles",
-    subcategorias: ["Sofas", "Mesas", "Sillas", "Armarios", "Camas"],
-  },
-  {
-    nombre: "Transporte",
-    subcategorias: ["Patin", "Scooter", "Deportivas"],
-  },
 
-  {
-    nombre: "Belleza & Accesorios",
-    subcategorias: ["Maquillaje", "Pelo", "Joyas", "Otros"],
-  },
-  {
-    nombre: "Hogar",
-    subcategorias: [
-      "Otros",
-      "Cocina",
-      "Sala de estar",
-      "Baño",
-      "Decoración",
-      "Iluminacion",
-    ],
-  },
-  {
-    nombre: "Otros",
-    subcategorias: ["Auriculares", "Smartwatch", "Otros"],
-  },
-];
+// -------------------------------
+// Constantes
+// -------------------------------
+const MAX_IMAGES = 9;
+const MIN_IMAGES_DEFAULT = 3;
+const MAX_FILE_MB = 8;
 
-const ImagePreview = ({ file, onRemove, index, sx }) => {
+const MAX_REAL_IMAGES = 2;
+const MAX_REAL_FILE_MB = 6;
+
+// -------------------------------
+// Helper preview (ya lo tenías)
+// -------------------------------
+const ImagePreview = ({ file, onRemove, index }) => {
   const [src, setSrc] = useState("");
 
   useEffect(() => {
-    if (file) {
-      const objectUrl = URL.createObjectURL(file);
-      setSrc(objectUrl);
-
-      return () => {
-        URL.revokeObjectURL(objectUrl);
-      };
-    }
+    if (!file) return;
+    const objectUrl = URL.createObjectURL(file);
+    setSrc(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
   }, [file]);
+
   return (
     <Box sx={{ position: "relative", display: "inline-block" }}>
       {file ? (
@@ -131,7 +78,7 @@ const ImagePreview = ({ file, onRemove, index, sx }) => {
           <IconButton
             color="error"
             size="small"
-            onClick={() => onRemove(file)}
+            onClick={onRemove}
             sx={{ position: "absolute", top: 0, right: 0 }}
           >
             &times;
@@ -156,918 +103,656 @@ const ImagePreview = ({ file, onRemove, index, sx }) => {
   );
 };
 
+// -------------------------------
+// Categorías (igual que tenías)
+// -------------------------------
+const categorias = [
+  {
+    nombre: "Moda & Accesorios",
+    subcategorias: ["Trajes", "Vestidos", "Bolsos", "Pantalones", "Calzado", "Camisas", "Otros"],
+  },
+  {
+    nombre: "Complementos para peques",
+    subcategorias: ["Bebés", "Niños", "Moda", "Otros"],
+  },
+  { nombre: "Deporte", subcategorias: ["Ropa", "Calzado", "Otros", "Gimnasio"] },
+  { nombre: "Electrónica", subcategorias: ["Drones", "Tablets", "Electrodomesticos", "Camaras"] },
+  { nombre: "Muebles", subcategorias: ["Sofas", "Mesas", "Sillas", "Armarios", "Camas"] },
+  { nombre: "Transporte", subcategorias: ["Patin", "Scooter", "Deportivas"] },
+  { nombre: "Belleza & Accesorios", subcategorias: ["Maquillaje", "Pelo", "Joyas", "Otros"] },
+  {
+    nombre: "Hogar",
+    subcategorias: ["Otros", "Cocina", "Sala de estar", "Dormitorio", "Baño", "Decoración", "Iluminacion"],
+  },
+  { nombre: "Otros", subcategorias: ["Auriculares", "Smartwatch", "Otros"] },
+];
+
+const pesos = [
+  { nombre: "Ultraligero", min: 0.1, max: 0.5 },
+  { nombre: "Ligero", min: 0.51, max: 1.1 },
+  { nombre: "Medio", min: 1.2, max: 2.0 },
+  { nombre: "Pesado", min: 2.01, max: 3.5 },
+  { nombre: "Muy pesado", min: 3.51, max: 4.5 },
+  { nombre: "Extremadamente pesado", min: 4.51, max: 6.0 },
+  { nombre: "Solo Barco", min: 7, max: 7 },
+];
+
+const dimensiones = [
+  { nombre: "Paquete pequeño", min: 0.023, max: 0.03 },
+  { nombre: "Tamaño personal", min: 0.031, max: 0.15 },
+  { nombre: "Paquete mediano", min: 0.151, max: 0.4 },
+  { nombre: "Paquete grande", min: 0.401, max: 0.8 },
+  { nombre: "Caja estándar", min: 0.801, max: 1.2 },
+  { nombre: "Caja extra grande", min: 1.201, max: 1.8 },
+  { nombre: "Carga pesada", min: 1.801, max: 2.2 },
+  { nombre: "Carga industrial", min: 2.201, max: 3.0 },
+  { nombre: "Cama y sofa", min: 3.101, max: 7.0 },
+];
+
+// -------------------------------
+// Permisos por usuario (igual idea)
+// -------------------------------
+function getCategoriasPorUsuario(username) {
+  const user = String(username || "").trim().toLowerCase();
+
+  const permisos = {
+    "01": ["Belleza & Accesorios", "Moda & Accesorios"],
+    "1": ["Belleza & Accesorios", "Moda & Accesorios"],
+    "001": ["Belleza & Accesorios", "Moda & Accesorios"],
+    "11": ["Electrónica", "Muebles", "Transporte"],
+  };
+
+  if (permisos[user]) {
+    return categorias.filter((cat) => permisos[user].includes(cat.nombre));
+  }
+  return [];
+}
+
+// -------------------------------
+// Publicar
+// -------------------------------
 const Publicar = () => {
+  const storage = useMemo(() => getStorage(app), []);
+  const database = useMemo(() => getDatabase(app), []);
+  const db = useMemo(() => getFirestore(app), []);
+
+  // user
+ const location = useLocation();
+const userName = location.state?.userName || "";
+ 
+
+  // ---------- Form states ----------
   const [title, setTitle] = useState("");
   const [price, setPrice] = useState("");
-  const location = useLocation();
-  const userName = location.state?.userName || "";
-  console.log(userName);
-
   const [cantidad, setCantidad] = useState("");
-  const [dimension, setDimension] = useState("");
-  const [peso, setpeso] = useState(0);
-
-  const [ubicacion, setUbicacion] = useState("");
-  const [loading, setLoading] = useState(false); // Loading state
-
   const [details, setDetails] = useState("");
-  const [images, setImages] = useState([]);
-  const [selectedChip, setSelectedChip] = useState("Aerea");
-  const [selectedChip1, setSelectedChip1] = useState(null);
-  const [selectedChip2, setSelectedChip2] = useState(null);
-  const [chips, setChips] = useState([]);
-  const [showbox, setShowBox] = useState(true);
-  const [imgs, setimgs] = useState(null);
-  const [selectedPeso, setSelectedPeso] = useState(null);
-  const [selectedDimension, setSelectedDimension] = useState(null);
-  const [selectedsubCategoria, setSelectedSubCategoria] = useState(null);
+
   const [selectedCategoria, setSelectedCategoria] = useState(null);
+  const [selectedsubCategoria, setSelectedSubCategoria] = useState(null);
   const [selectedGender, setSelectedGender] = useState(null);
 
-  const MARGEN = (preciobase) => {
-    if (preciobase <= 7000) {
-      return preciobase * 1.3 + 1500;
-    } else if (preciobase <= 25000) {
-      return preciobase * 1.22 + 1000;
-    } else if (preciobase <= 250000) {
-      return preciobase * 1.15;
-    } else if (preciobase <= 500000) {
-      return preciobase * 1.12;
-    } else {
-      return preciobase * 1.08 + 100000;
-    }
-  };
+  const [selectedPeso, setSelectedPeso] = useState(null);
+  const [selectedDimension, setSelectedDimension] = useState(null);
 
-  let categ = "Moda & Accesorios"; //Categoria
-  let country = "China";
-
-  const pesos = [
-    { nombre: "Ultraligero", min: 0.1, max: 0.5 },
-    { nombre: "Ligero", min: 0.51, max: 1.1 },
-    { nombre: "Medio", min: 1.2, max: 2.0 },
-    { nombre: "Pesado", min: 2.01, max: 3.5 },
-    { nombre: "Muy pesado", min: 3.51, max: 4.5 },
-    { nombre: "Extremadamente pesado", min: 4.51, max: 6.0 },
-    { nombre: "Solo Barco", min: 7, max: 7 },
-  ];
-  const subCategorias = [
-    { nombre: "Trajes", estimacion: { min: 0.8, max: 1.4 } },
-    { nombre: "Vestidos", estimacion: { min: 0.5, max: 1.0 } },
-    { nombre: "Camisas", estimacion: { min: 0.2, max: 0.5 } },
-    { nombre: "Bolsos", estimacion: { min: 0.3, max: 0.9 } },
-    { nombre: "Calzado", estimacion: { min: 0.6, max: 1.2 } },
-    { nombre: "Faldas", estimacion: { min: 0.3, max: 0.7 } },
-    { nombre: "Pantalones", estimacion: { min: 0.3, max: 0.7 } },
-    { nombre: "Otros", estimacion: { min: 0.3, max: 0.7 } },
-    { nombre: "Ropa Interior", estimacion: { min: 0.3, max: 0.7 } },
-  ];
-
-  function getCategoriasPorUsuario(username) {
-    const user = username.trim().toLowerCase();
-
-    const permisos = {
-      "01": [, "Complementos para peques", "Otros"],
-      1: ["Belleza & Accesorios", "Moda & Accesorios"],
-      "001": ["Hogar", "Deporte"],
-
-      11: ["Electrónica", "Muebles", "Transporte"],
-    };
-
-    // Si el usuario tiene permisos definidos
-    if (permisos[user]) {
-      return categorias.filter((cat) => permisos[user].includes(cat.nombre));
-    }
-
-    // Si el usuario no tiene permisos → devolver vacío o todo
-    return [];
-  }
-  // ROPA Y ACCESORIOS
-
-  console.log("eiby bielo");
-
-  const dimensiones = [
-    { nombre: "Paquete pequeño", min: 0.023, max: 0.03 },
-    { nombre: "Tamaño personal", min: 0.031, max: 0.15 },
-    { nombre: "Paquete mediano", min: 0.151, max: 0.4 },
-    { nombre: "Paquete grande", min: 0.401, max: 0.8 },
-    { nombre: "Caja estándar", min: 0.801, max: 1.2 },
-    { nombre: "Caja extra grande", min: 1.201, max: 1.8 },
-    { nombre: "Carga pesada", min: 1.801, max: 2.2 },
-    { nombre: "Carga industrial", min: 2.201, max: 3.0 },
-    { nombre: "Cama y sofa", min: 3.101, max: 7.0 },
-  ];
-
-  const [chipOptions, setchipOptions] = useState([]);
-  const [chipOptionscat, setchipOptionscat] = useState([]);
-  console.log(categ);
   const [chipscolor, setChipscolor] = useState([]);
+  const [chips, setChips] = useState([]);
   const [prices, setPrices] = useState({});
+
   const [inputValue, setInputValue] = useState("");
   const [inputValues, setInputValues] = useState("");
-  const [view, setView] = useState("");
-  const database = getDatabase(app);
-  const db = getFirestore(app);
 
-  let maysaID = "y7eJBoQ23feGEF3HAF2sZxpDKig1";
+  const [loading, setLoading] = useState(false);
 
-  const storage = getStorage(app);
-  const handleCategoriaClick = (nombre) => {
-    setSelectedCategoria((prev) => (prev === nombre ? null : nombre));
-    console.log(selectedsubCategoria, "heis");
-    setSelectedSubCategoria(null); // ✅ Limpia la subcategoría al cambiar
-  };
+  // ---------- Imágenes normales ----------
+  const [images, setImages] = useState([]);
 
-  const categoriaSeleccionada = categorias.find(
-    (cat) => cat.nombre === selectedCategoria
-  );
+  // ---------- ✅ NUEVO: Imágenes reales (sección extra) ----------
+  const [codigoCreado, setCodigoCreado] = useState(""); // id del producto creado
+  const [videoLinkReal, setVideoLinkReal] = useState(""); // opcional (campo id)
+  const [realImages, setRealImages] = useState([]); // File[]
+  const [imagenesReales, setImagenesReales] = useState([]); // urls
+  const [savingReal, setSavingReal] = useState(false);
+  const [realMsg, setRealMsg] = useState("");
 
-  const handleTitleChange = (e) =>
-    setTitle(capitalizeFirstLetter(e.target.value));
-  const handlePriceChange = (e) => setPrice(e.target.value);
+  // ---------- Helpers ----------
+  const MARGEN = useCallback((preciobase) => {
+    const p = Number(preciobase || 0);
+    if (p <= 7000) return p * 1.3 + 1500;
+    if (p <= 25000) return p * 1.22 + 1000;
+    if (p <= 250000) return p * 1.15;
+    if (p <= 500000) return p * 1.12;
+    return p * 1.08 + 100000;
+  }, []);
 
-  const handleCantidad = (e) => setCantidad(e.target.value);
-
-  const handleDetailsChange = (e) => setDetails(e.target.value);
-
-  const dbRealtime = getDatabase(app);
-  const dbFirestore = getFirestore(app);
-
-  const handleChipClickPeso = (peso) => {
-    // Si el chip ya está seleccionado, lo deselecciona
-    setSelectedPeso((prev) => (prev === peso ? null : peso)); // Si clicas la misma, se oculta
-  };
-  const handleChipClickCategoria = (peso) => {
-    // Si el chip ya está seleccionado, lo deselecciona
-    setSelectedSubCategoria((prev) => (prev === peso ? null : peso)); // Si clicas la misma, se oculta
-  };
-
-  const handleChipClickDimension = (dimension) => {
-    // Si el chip ya está seleccionado, lo deselecciona
-    if (selectedPeso === dimension) {
-      setSelectedDimension(null);
-    } else {
-      setSelectedDimension(dimension);
-    }
-  };
-
-  // 👉 Tu array de códigos a migrar
-  const codigosArray = [, "-OH1eDCOAABkZleBX2aM"];
-
-  async function migrateProductsFromArray() {
-    try {
-      for (const codigo of codigosArray) {
-        console.log(`🔍 Revisando producto: ${codigo}`);
-
-        // 📌 Verificar si ya existe en Firestore
-        const productoRef = doc(dbFirestore, "productos", codigo);
-        const productoSnap = await getDoc(productoRef);
-
-        if (productoSnap.exists()) {
-          console.log(`⏩ Producto ${codigo} ya migrado. Se omite.`);
-          continue;
-        }
-
-        // 📌 Obtener producto desde RTDB
-        const productoRefRTDB = ref(dbRealtime, `/GE/Exterior/Prod/${codigo}`);
-        const snapshot = await get(productoRefRTDB);
-
-        if (!snapshot.exists()) {
-          console.log(`⚠️ Producto ${codigo} no encontrado en RTDB.`);
-          continue;
-        }
-
-        const producto = snapshot.val();
-
-        console.log(`📦 Migrando producto: ${codigo}`);
-
-        // Datos principales (sin imágenes, tallas, colores)
-        const { Imagenes, Talla, Color, ...rest } = producto;
-
-        // ➕ Añadir campo "origen: China"
-        const productoData = {
-          ...rest,
-          origen: "China",
-        };
-
-        // Guardar producto base en Firestore
-        await setDoc(productoRef, productoData);
-
-        // 3️⃣ Subcolección de imágenes
-        if (Imagenes) {
-          for (const [imgId, imgData] of Object.entries(Imagenes)) {
-            const imgRef = doc(collection(productoRef, "imagenes"), imgId);
-            await setDoc(imgRef, imgData);
-          }
-        }
-
-        // 4️⃣ Subcolección de tallas
-        if (Talla) {
-          for (const [tallaId, tallaData] of Object.entries(Talla)) {
-            const tallaRef = doc(collection(productoRef, "tallas"), tallaId);
-            await setDoc(tallaRef, tallaData);
-          }
-        }
-
-        // 5️⃣ Subcolección de colores
-        if (Color) {
-          for (const [colorId, colorData] of Object.entries(Color)) {
-            const colorRef = doc(collection(productoRef, "colores"), colorId);
-            await setDoc(colorRef, colorData);
-          }
-        }
-
-        console.log(`✅ Producto ${codigo} migrado con éxito.`);
-      }
-
-      console.log("🎉 Migración finalizada para todos los códigos del array.");
-    } catch (error) {
-      console.error("❌ Error migrando productos:", error);
-    }
-  }
-
-  async function verificarProductos() {
-    try {
-      // 1️⃣ Query: leer desde un producto específico en adelante
-      const productosQuery = ref(dbRealtime, "/GE/Exterior/Prod");
-
-      const snapshot = await get(productosQuery);
-
-      if (!snapshot.exists()) {
-        console.log("No se encontraron productos en RTDB desde");
-        return;
-      }
-
-      const productos = snapshot.val();
-
-      // Arrays de control
-      const yaMigrados = [];
-      const noMigrados = [];
-
-      // 2️⃣ Recorrer productos
-      for (const [codigo] of Object.entries(productos)) {
-        console.log(`🔍 Verificando producto: ${codigo}`);
-
-        const productoRef = doc(dbFirestore, "productos", codigo);
-        const productoSnap = await getDoc(productoRef);
-
-        if (productoSnap.exists()) {
-          yaMigrados.push(codigo);
-        } else {
-          noMigrados.push(codigo);
-        }
-      }
-
-      // 📊 Mostrar resultado
-      console.log("✅ Verificación completada.");
-      console.log("Productos YA en Firestore:", yaMigrados);
-      console.log("Productos que NO están en Firestore:", noMigrados);
-
-      return { yaMigrados, noMigrados };
-    } catch (error) {
-      console.error("❌ Error verificando productos:", error);
-    }
-  }
-
-  const migrateGEInfoToFirestore = async () => {
-    try {
-      const dbRealtime = getDatabase(); // Realtime Database
-      const firestore = getFirestore(); // Firestore
-
-      const infoRef = ref(dbRealtime, "/GE/Info");
-      const snapshot = await get(infoRef);
-
-      if (!snapshot.exists()) {
-        console.log("No hay datos en /GE/Info");
-        return;
-      }
-
-      const data = snapshot.val();
-
-      // Iterar sobre cada nodo de /GE/Info
-      for (const key in data) {
-        if (data.hasOwnProperty(key)) {
-          const value = data[key];
-
-          // Solo migrar valores exactos: string, number o boolean
-          if (
-            typeof value === "string" ||
-            typeof value === "number" ||
-            typeof value === "boolean"
-          ) {
-            // Guardar en Firestore como documento separado
-            await setDoc(doc(firestore, "GE_Info", key), { value });
-            console.log(`Migrado: ${key} → ${value}`);
-          } else {
-            console.log(`Omitido ${key}, contiene valores anidados`);
-          }
-        }
-      }
-
-      console.log("Migración completada ✅");
-    } catch (error) {
-      console.error("Error migrando datos:", error);
-    }
-  };
-
-  const subirDatoConID = async () => {
-    try {
-      // Crear referencia de documento con ID automático
-      const docRef = doc(collection(db, "usuarios"));
-      const id = docRef.id; // Obtener ID generado
-
-      // Subir el objeto con el ID incluido
-      await setDoc(docRef, {
-        id: id,
-        man: "eie",
-        nombre: "eiby",
-      });
-
-      console.log("Documento subido con ID ✅", id);
-    } catch (error) {
-      console.error("Error al subir el documento ❌", error);
-    }
-  };
-
-  const handleImageUpload = async (event) => {
-    const files = Array.from(event.target.files);
-    if (files.length + images.length > 9)
-      return alert("You can upload up to 9 images only.");
-
-    try {
-      const compressedFiles = await Promise.all(
-        files.map(async (file) => {
-          console.log(
-            `Original: ${file.name}, ${(file.size / 1024).toFixed(2)} KB`
-          );
-          const compressedFile = await compressImage(file);
-          console.log(
-            `Compressed: ${compressedFile.name}, ${(
-              compressedFile.size / 1024
-            ).toFixed(2)} KB`
-          );
-          return compressedFile;
-        })
-      );
-
-      setImages((prevImages) => [...prevImages, ...compressedFiles]);
-    } catch (error) {
-      console.error("Image compression failed:", error);
-    }
-  };
-  const handleRemoveImage = (index) => {
-    setImages(images.filter((_, i) => i !== index));
-  };
-  const getCurrentTimeInMilliseconds = () => {
-    return Date.now();
-  };
+  const getCurrentTimeInMilliseconds = () => Date.now();
 
   function normalizarTexto(texto) {
-    return texto
+    return String(texto || "")
       .toLowerCase()
-      .normalize("NFD") // descompone caracteres acentuados
-      .replace(/[\u0300-\u036f]/g, "") // elimina acentos
-      .replace(/[^\w\s]/gi, ""); // elimina caracteres especiales
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^\w\s]/gi, "");
   }
 
-  // Prepare the common data object with the provided information
-  const prepareCommonData = async (codigo, fecha) => {
-    const titulonormalizado = normalizarTexto(title);
-    const tokens = titulonormalizado
-      .toLowerCase()
-      .split(" ")
-      .filter((word) => word.length >= 4) // palabras con 4 o más letras
-      .slice(0, 6); // máximo 6 palabras
+  // País/origen fijos (como tu código)
+  const country = "China";
 
-    const data = {
-      Titulo: title,
-      Ttoken: tokens,
-      Categoria: selectedCategoria,
-      Subcategoria: selectedsubCategoria, // Baño
-      Codigo: codigo,
-      Precio: parseInt(MARGEN(price)),
-      Peso: selectedPeso,
-      Dimension: selectedDimension || "Paquete mediano",
-      Detalles: details,
-      Vistos: 0,
-      Vendedor: userName,
-      // Compras: 0,
-      Fecha: fecha,
-      // Descuento: 0,
-      Pais: country,
-    };
+  // -------------------------------
+  // Upload imágenes normales (con compresión)
+  // -------------------------------
+  const handleImageUpload = useCallback(
+    async (event) => {
+      const input = event.target;
+      const files = Array.from(input.files || []);
+      if (files.length === 0) return;
 
-    // 📌 Solo agregar Stock si el país es "Guinea ecuatorial"
-    if (country === "Guinea ecuatorial") {
-      data.Stock = parseInt(cantidad);
-    }
-    if (selectedsubCategoria === "Moda & Accesorios") {
-      data.Genero = selectedGender;
-    }
-
-    return data;
-  };
-
-  async function actualizarTokens() {
-    try {
-      const productosRef = collection(db, "productos");
-
-      const q = query(productosRef); // ✅ consulta con limit
-
-      const snapshot = await getDocs(q); // ✅ esto devuelve QuerySnapshot
-
-      if (!snapshot.empty) {
-        let actualizados = 0;
-
-        for (const docSnap of snapshot.docs) {
-          const data = docSnap.data();
-
-          if (
-            data.Ttoken &&
-            Array.isArray(data.Ttoken) &&
-            data.Ttoken.length > 0
-          ) {
-            continue;
-          }
-
-          const titulo = data.Titulo;
-          const tituloNormalizado = normalizarTexto(titulo);
-
-          const tokens = tituloNormalizado
-            .split(" ")
-            .filter((word) => word.length >= 4)
-            .slice(0, 5);
-
-          await updateDoc(doc(db, "productos", docSnap.id), {
-            Ttoken: tokens,
-          });
-
-          console.log(`Producto ${docSnap.id} actualizado:`, tokens);
-          actualizados++;
-        }
-
-        console.log(
-          `Proceso terminado. Productos actualizados: ${actualizados}`
-        );
-      } else {
-        console.log("No se encontraron productos.");
-      }
-    } catch (error) {
-      console.error("Error actualizando productos:", error);
-    }
-  }
-
-  async function eliminarCamposConUbicacion() {
-    try {
-      const productosRef = collection(db, "productos");
-
-      // 🔹 Buscar solo los productos que tienen "Ubicacion"
-      const q = query(productosRef, where("Condicion", "!=", ""));
-
-      const snapshot = await getDocs(q);
-
-      if (snapshot.empty) {
-        console.log("No se encontraron productos con Ubicacion.");
+      if (files.length + images.length > MAX_IMAGES) {
+        alert(`You can upload up to ${MAX_IMAGES} images only.`);
+        input.value = "";
         return;
       }
 
-      let eliminados = 0;
+      try {
+        const processed = await Promise.all(
+          files.map(async (file) => {
+            if (!file.type.startsWith("image/")) {
+              throw new Error(`Archivo no permitido: ${file.name}`);
+            }
+            if (file.size / 1024 / 1024 > MAX_FILE_MB) {
+              throw new Error(`Imagen muy grande (${MAX_FILE_MB}MB máx): ${file.name}`);
+            }
 
-      for (const docSnap of snapshot.docs) {
-        const data = docSnap.data();
+            const webpFile = await compressImage(file, {
+              maxWidth: 1200,
+              maxHeight: 900,
+              quality: 0.8,
+            });
 
-        // Solo si realmente tienen alguno de esos campos
-        const camposAEliminar = {};
-        let tieneCampo = false;
+            return webpFile;
+          })
+        );
 
-        [
-          "Envio",
-          "Ubicacion",
-          "Duracion",
-          "Condicion",
-          "Tipo",
-          "origen",
-        ].forEach((campo) => {
-          if (data[campo] !== undefined) {
-            camposAEliminar[campo] = deleteField();
-            tieneCampo = true;
-          }
+        setImages((prev) => [...prev, ...processed]);
+      } catch (error) {
+        console.error("Image processing failed:", error);
+        alert(error?.message ?? "Image processing failed");
+      } finally {
+        input.value = "";
+      }
+    },
+    [images.length]
+  );
+
+  const handleRemoveImage = useCallback((index) => {
+    setImages((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  // -------------------------------
+  // Upload a storage imágenes normales
+  // -------------------------------
+  const uploadImagesToStorage = useCallback(
+    async (imageFiles) => {
+      const imageUrls = [];
+
+      for (const imageFile of imageFiles) {
+        if (!imageFile || !imageFile.type?.startsWith("image/")) {
+          throw new Error("Archivo inválido (no es imagen)");
+        }
+
+        const uniqueId =
+          (crypto.randomUUID && crypto.randomUUID()) ||
+          `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+        const ext =
+          imageFile.type === "image/webp"
+            ? "webp"
+            : imageFile.type === "image/png"
+            ? "png"
+            : "jpg";
+
+        const imageRef = storageref(storage, `Imagenes/Productos/${uniqueId}.${ext}`);
+
+        await uploadBytes(imageRef, imageFile, {
+          contentType: imageFile.type,
+          cacheControl: "public,max-age=31536000,immutable",
         });
 
-        if (tieneCampo) {
-          await updateDoc(doc(db, "productos", docSnap.id), camposAEliminar);
-          console.log(`🧹 Campos eliminados en producto ${docSnap.id}`);
-          eliminados++;
-        }
-      }
-
-      console.log(
-        `✅ Proceso completado: ${eliminados} productos actualizados.`
-      );
-    } catch (error) {
-      console.error("❌ Error eliminando campos:", error);
-    }
-  }
-
-  async function actualizarContador(username) {
-    try {
-      // 🔹 Mapa para relacionar usuario con su campo
-      const userMap = {
-        1: "Asly",
-        "01": "Maysa",
-        "001": "Vicky",
-        11: "Esteban",
-      };
-
-      const nombreCampo = userMap[username];
-      if (!nombreCampo) {
-        console.log("Usuario no válido");
-        return;
-      }
-
-      // 🔹 Referencia al documento en Firestore
-      const ref = doc(db, "GE_Info", "Nombres");
-
-      // 🔹 Obtener el documento actual
-      const snapshot = await getDoc(ref);
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        const valorActual = data[nombreCampo] || 0;
-
-        // 🔹 Incrementar el valor
-        const nuevoValor = valorActual + 1;
-
-        // 🔹 Subir el nuevo valor
-        await updateDoc(ref, { [nombreCampo]: nuevoValor });
-
-        console.log(`✅ ${nombreCampo} actualizado a ${nuevoValor}`);
-      } else {
-        console.log("El documento 'Nombres' no existe.");
-      }
-    } catch (error) {
-      console.error("❌ Error al actualizar contador:", error);
-    }
-  }
-
-  async function moverImagenPrincipal() {
-    try {
-      const productosRef = collection(db, "productos");
-
-      // 🔹 Buscar solo los productos que tienen "imagenPrincipal"
-      const q = query(productosRef, where("ImagenPrincipal", "!=", null));
-      const snapshot = await getDocs(q);
-
-      if (snapshot.empty) {
-        console.log("No se encontraron productos con imagenPrincipal.");
-        return;
-      }
-
-      let actualizados = 0;
-
-      for (const docSnap of snapshot.docs) {
-        const data = docSnap.data();
-
-        // Solo actuar si realmente tiene el campo
-        if (data.ImagenPrincipal !== undefined) {
-          await updateDoc(doc(db, "productos", docSnap.id), {
-            Imagen: data.ImagenPrincipal, // copiar valor
-            ImagenPrincipal: deleteField(), // eliminar campo original
-          });
-
-          console.log(`📸 Imagen movida en producto ${docSnap.id}`);
-          actualizados++;
-        }
-      }
-
-      console.log(
-        `✅ Proceso completado: ${actualizados} productos actualizados.`
-      );
-    } catch (error) {
-      console.error("❌ Error moviendo imagenPrincipal:", error);
-    }
-  }
-
-  // useEffect(() => {
-  //   moverImagenPrincipal();
-  // }, []); // solo se ejecuta una vez
-  // Upload images to Firebase Storage and get their URLs
-  const uploadImagesToStorage = async (imageFiles) => {
-    const imageUrls = [];
-    try {
-      for (let i = 0; i < imageFiles.length; i++) {
-        const imageFile = imageFiles[i];
-
-        // Log image file properties to make sure it's a valid Blob
-        console.log(imageFile, imageFile.type);
-
-        // Generate a unique reference for the image in Firebase Storage
-        const imageRef = storageref(
-          storage,
-          `Imagenes/Productos/${getCurrentTimeInMilliseconds()}.jpeg`
-        );
-
-        // Upload the image (Blob) to Firebase Storage
-        await uploadBytes(imageRef, imageFile);
-
-        // Get the download URL for the uploaded image
         const imageUrl = await getDownloadURL(imageRef);
-
-        // Push the URL to the imageUrls array
         imageUrls.push(imageUrl);
       }
-    } catch (error) {
-      console.error("Error uploading images: ", error);
-    }
-    return imageUrls;
-  };
-  // Función para separar las imágenes en principal, real, paquete y extras
-  const separateImages = (imageUrls) => {
+
+      return imageUrls;
+    },
+    [storage]
+  );
+
+  // -------------------------------
+  // Separar imágenes (principal + extras)
+  // -------------------------------
+  const separateImages = useCallback((imageUrls) => {
     if (!Array.isArray(imageUrls) || imageUrls.length === 0) {
       throw new Error("Debes proporcionar al menos una imagen.");
     }
+    if (imageUrls.length === 1) return { principal: imageUrls[0], extraImages: [] };
+    return { principal: imageUrls[0], extraImages: imageUrls.slice(1) };
+  }, []);
 
-    // Si hay menos de 3 imágenes → no se excluye nada
-    if (imageUrls.length === 1) {
-      return { principal: imageUrls, extraImages: imageUrls };
-    }
+  // -------------------------------
+  // Subcolecciones (colores, tallas, extras)
+  // -------------------------------
+  const createColorsNode = useCallback(
+    async (codigo, colors) => {
+      const productoRef = doc(db, "productos", codigo);
+      for (const color of colors) {
+        const colorId = doc(collection(db, `productos/${codigo}/colores`)).id;
+        await setDoc(doc(collection(productoRef, "colores"), colorId), {
+          id: colorId,
+          label: color,
+        });
+      }
+    },
+    [db]
+  );
 
-    // Si hay 3 o más imágenes → se excluye la primera
-    const principal = imageUrls[0];
-    const extraImages = imageUrls.slice(1);
+  const createSizesNode = useCallback(
+    async (codigo, sizes, pricesMap) => {
+      const productoRef = doc(db, "productos", codigo);
+      for (const size of sizes) {
+        const sizeId = doc(collection(db, `productos/${codigo}/tallas`)).id;
+        const precio = Number(pricesMap[size] || 0);
+        await setDoc(doc(collection(productoRef, "tallas"), sizeId), {
+          id: sizeId,
+          label: size,
+          precio: Number.isFinite(precio) && precio > 0 ? parseInt(MARGEN(precio), 10) : 0,
+        });
+      }
+    },
+    [db, MARGEN]
+  );
 
-    return { principal, extraImages };
-  };
+  const uploadExtraImages = useCallback(
+    async (codigo, extraImages) => {
+      const productoRef = doc(db, "productos", codigo);
+      for (const url of extraImages) {
+        const imgId = doc(collection(db, `productos/${codigo}/imagenes`)).id;
+        await setDoc(doc(collection(productoRef, "imagenes"), imgId), {
+          id: imgId,
+          Imagen: url,
+        });
+      }
+    },
+    [db]
+  );
 
-  // Crear subcolección de colores
-  const createColorsNode = async (codigo, chipscolor) => {
-    const colorsNode = [];
-    for (const color of chipscolor) {
-      const colorId = doc(collection(db, `productos/${codigo}/colores`)).id;
-      const colorData = { id: colorId, label: color };
-      colorsNode.push(colorData);
+  // -------------------------------
+  // Preparar datos comunes del producto
+  // -------------------------------
+  const prepareCommonData = useCallback(
+    async (codigo, fecha) => {
+      const titulonormalizado = normalizarTexto(title);
+      const tokens = titulonormalizado
+        .split(" ")
+        .filter((word) => word.length >= 4)
+        .slice(0, 6);
 
-      // Guardar en subcolección
-      await setDoc(
-        doc(db, `productos/${codigo}/colores/${colorId}`),
-        colorData
-      );
-    }
-    return colorsNode;
-  };
-
-  // Crear subcolección de tallas
-  const createSizesNode = async (codigo, chips, prices) => {
-    const sizesNode = [];
-
-    for (const size of chips) {
-      const sizeId = doc(collection(db, `productos/${codigo}/tallas`)).id;
-      const sizeData = {
-        id: sizeId,
-        label: size,
-        precio: prices[size] > 0 ? parseInt(MARGEN(prices[size])) : 0,
+      const data = {
+        Titulo: title,
+        Ttoken: tokens,
+        Categoria: selectedCategoria,
+        Subcategoria: selectedsubCategoria,
+        Codigo: codigo,
+        Precio: parseInt(MARGEN(price), 10),
+        Peso: selectedPeso,
+        Dimension: selectedDimension || "Paquete mediano",
+        Detalles: details,
+        Vistos: 0,
+        visible: true,
+        Vendedor: userName,
+        Fecha: fecha,
+        Pais: country,
       };
-      sizesNode.push(sizeData);
 
-      // Guardar en subcolección
-      await setDoc(doc(db, `productos/${codigo}/tallas/${sizeId}`), sizeData);
-    }
-    return sizesNode;
-  };
+      // Stock solo si NO es China (en tu código era country !== China)
+      // Como aquí country está fijo en China, lo dejo por si lo cambias:
+      if (country !== "China") data.Stock = parseInt(cantidad || 0, 10);
 
-  // Subir imágenes extras a subcolección
-  const uploadExtraImages = async (codigo, extraImages) => {
-    for (const url of extraImages) {
-      const imgId = doc(collection(db, `productos/${codigo}/imagenes`)).id;
-      await setDoc(doc(db, `productos/${codigo}/imagenes/${imgId}`), {
-        id: imgId,
-        Imagen: url,
-      });
-    }
-  };
-  async function migrarUrlAImagen() {
-    console.log("🔄 Migrando url → Imagen...");
+      if (selectedCategoria === "Moda & Accesorios" && selectedGender) {
+        data.Genero = selectedGender;
+      }
 
-    try {
-      // Buscar documentos con campo url
-      const imagenesSnapshot = await getDocs(
-        query(collectionGroup(db, "imagenes"), where("url", "!=", null))
-      );
+      return data;
+    },
+    [
+      title,
+      selectedCategoria,
+      selectedsubCategoria,
+      price,
+      selectedPeso,
+      selectedDimension,
+      details,
+      userName,
+      cantidad,
+      selectedGender,
+      MARGEN,
+      country,
+    ]
+  );
 
-      console.log(`📸 Encontrados: ${imagenesSnapshot.size} documentos`);
+  // -------------------------------
+  // Actualizar contador (tu versión)
+  // -------------------------------
+  const actualizarContador = useCallback(
+    async (username) => {
+      try {
+        const userMap = {
+          1: "Asly",
+          "01": "Maysa",
+          "001": "Vicky",
+          11: "Esteban",
+        };
 
-      if (imagenesSnapshot.empty) {
-        console.log("✅ No hay documentos para migrar");
+        const nombreCampo = userMap[username];
+        if (!nombreCampo) return;
+
+        const refDoc = doc(db, "GE_Info", "Nombres");
+        const snapshot = await getDoc(refDoc);
+        if (!snapshot.exists()) return;
+
+        const data = snapshot.data();
+        const valorActual = data[nombreCampo] || 0;
+        await updateDoc(refDoc, { [nombreCampo]: valorActual + 1 });
+      } catch (error) {
+        console.error("❌ Error al actualizar contador:", error);
+      }
+    },
+    [db]
+  );
+
+  // -------------------------------
+  // UI Handlers (chips)
+  // -------------------------------
+  const handleCategoriaClick = useCallback((nombre) => {
+    setSelectedCategoria((prev) => (prev === nombre ? null : nombre));
+    setSelectedSubCategoria(null);
+  }, []);
+
+  const categoriaSeleccionada = useMemo(
+    () => categorias.find((cat) => cat.nombre === selectedCategoria),
+    [selectedCategoria]
+  );
+
+  const handleChipClickPeso = useCallback((pesoName) => {
+    setSelectedPeso((prev) => (prev === pesoName ? null : pesoName));
+  }, []);
+
+  const handleChipClickCategoria = useCallback((sub) => {
+    setSelectedSubCategoria((prev) => (prev === sub ? null : sub));
+  }, []);
+
+  const handleChipClickDimension = useCallback((dimensionName) => {
+    setSelectedDimension((prev) => (prev === dimensionName ? null : dimensionName));
+  }, []);
+
+  const handleAddChipColor = useCallback(
+    (e) => {
+      if (e.key === "Enter" || e.key === ",") {
+        e.preventDefault();
+        const v = inputValue.trim();
+        if (!v) return;
+        setChipscolor((prev) => [...prev, capitalizeFirstLetter(v)]);
+        setInputValue("");
+      }
+    },
+    [inputValue]
+  );
+
+  const handleAddChipTalla = useCallback(
+    (e) => {
+      if (e.key === "Enter" || e.key === ",") {
+        e.preventDefault();
+        const v = inputValues.trim();
+        if (!v) return;
+        const name = capitalizeFirstLetter(v);
+        setChips((prev) => [...prev, name]);
+        setPrices((prev) => ({ ...prev, [name]: "" }));
+        setInputValues("");
+      }
+    },
+    [inputValues]
+  );
+
+  const handleDeleteChipColor = useCallback((chipToDelete) => {
+    setChipscolor((prev) => prev.filter((c) => c !== chipToDelete));
+  }, []);
+
+  const handleDeleteChipTalla = useCallback((chipToDelete) => {
+    setChips((prev) => prev.filter((c) => c !== chipToDelete));
+    setPrices((prev) => {
+      const copy = { ...prev };
+      delete copy[chipToDelete];
+      return copy;
+    });
+  }, []);
+
+  const handlePriceChanges = useCallback((e, chipName) => {
+    setPrices((prev) => ({ ...prev, [chipName]: e.target.value }));
+  }, []);
+
+  // -------------------------------
+  // ✅ NUEVO: imágenes reales (subir + guardar)
+  // -------------------------------
+  const handleRealImagesUpload = useCallback(
+    async (event) => {
+      const input = event.target;
+      const files = Array.from(input.files || []);
+      if (files.length === 0) return;
+
+      if (files.length + realImages.length > MAX_REAL_IMAGES) {
+        alert(`Solo puedes subir ${MAX_REAL_IMAGES} imágenes reales.`);
+        input.value = "";
         return;
       }
 
-      let actualizados = 0;
+      try {
+        const processed = await Promise.all(
+          files.map(async (file) => {
+            if (!file.type.startsWith("image/")) {
+              throw new Error(`Archivo no permitido: ${file.name}`);
+            }
+            if (file.size / 1024 / 1024 > MAX_REAL_FILE_MB) {
+              throw new Error(`Imagen muy grande (${MAX_REAL_FILE_MB}MB máx): ${file.name}`);
+            }
 
-      // Actualizar cada documento
-      for (const doc of imagenesSnapshot.docs) {
-        const data = doc.data();
+            const webpFile = await compressImage(file, {
+              maxWidth: 1200,
+              maxHeight: 900,
+              quality: 0.8,
+            });
 
-        // Si tiene url pero no tiene Imagen, copiamos el valor
-        if (data.url && !data.Imagen) {
-          await updateDoc(doc.ref, {
-            Imagen: data.url,
-          });
-          actualizados++;
-          console.log(`✅ ${doc.ref.path}`);
-        }
-      }
-
-      console.log(`🎉 Completado: ${actualizados} documentos actualizados`);
-    } catch (error) {
-      console.error("❌ Error:", error);
-    }
-  }
-
-  // migrarUrlAImagen();
-
-  // Función principal para manejar el submit
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-
-    try {
-      // Validación mínima de imágenes
-      if (selectedsubCategoria === "Pelo") {
-        if (images.length === 0) {
-          throw new Error(
-            "Cuidado!!!, Se necesitan al menos 1 imágen para continuar."
-          );
-        }
-      } else {
-        if (images.length < 3) {
-          throw new Error(
-            "Cuidado!!!, Se necesitan al menos 3 imágenes para continuar."
-          );
-        }
-      }
-
-      if (!selectedsubCategoria) {
-        throw new Error("Cuidado!!!, no haz seleccionado la subcategorias");
-      }
-
-      // Validación de peso
-      if (!selectedPeso) {
-        throw new Error("Cuidado!!!, no haz seleccionado un peso.");
-      }
-
-      if (selectedCategoria === "Moda & Accesorios" && !selectedGender) {
-        throw new Error("Cuidado!!!, no haz seleccionado un género.");
-      }
-      if (
-        (!chipscolor || chipscolor.length === 0) &&
-        (!chips || chips.length === 0)
-      ) {
-        throw new Error(
-          "Cuidado!!!, debes agregar al menos un color o un estilo para continuar."
+            return webpFile;
+          })
         );
+
+        setRealImages((prev) => [...prev, ...processed]);
+        setRealMsg("");
+      } catch (e) {
+        console.error("Real image processing failed:", e);
+        alert(e?.message ?? "Error procesando imágenes reales");
+      } finally {
+        input.value = "";
       }
-      // Crear referencia de producto
-      const newItemRef = doc(collection(db, "productos"));
-      const codigo = newItemRef.id;
+    },
+    [realImages.length]
+  );
 
-      // Datos comunes del producto
-      const fecha = getCurrentTimeInMilliseconds();
-      let commonData = await prepareCommonData(codigo, fecha);
+  const handleRemoveRealImage = useCallback((index) => {
+    setRealImages((prev) => prev.filter((_, i) => i !== index));
+  }, []);
 
-      // // Subir todas las imágenes a Storage y obtener URLs
-      const imageUrls = await uploadImagesToStorage(images);
+  const uploadRealImageFile = useCallback(
+    async (file, index, codigo) => {
+      const ext = file.type === "image/webp" ? "webp" : "jpg";
+      const path = `productos/${codigo}/imagenesreales/${index}_${Date.now()}.${ext}`;
+      const imageRef = storageref(storage, path);
 
-      // // Separar imágenes
-      const { principal, real, paquete, extraImages } =
-        separateImages(imageUrls);
+      await uploadBytes(imageRef, file, {
+        contentType: file.type,
+        cacheControl: "public,max-age=31536000,immutable",
+      });
 
-      // console.log(principal, extraImages);
-      // // Guardar imágenes especiales en el documento principal
-      commonData.Imagen = principal;
-      // commonData.RealImage = real;
-      // commonData.PaqueteImage = paquete;
+      return await getDownloadURL(imageRef);
+    },
+    [storage]
+  );
 
-      // // Guardar producto principal
-      await setDoc(newItemRef, commonData);
+  const saveRealMedia = useCallback(async () => {
+    setRealMsg("");
 
-      // // Guardar imágenes extra en subcolección
-      if (extraImages.length > 0) {
-        await uploadExtraImages(codigo, extraImages);
-      }
-
-      // // Guardar colores y tallas
-      if (chipscolor.length > 0) await createColorsNode(codigo, chipscolor);
-      if (chips.length > 0) await createSizesNode(codigo, chips, prices);
-
-      await actualizarContador(userName);
-
-      // Reset de estados
-      setLoading(false);
-      setImages([]);
-      setChipscolor([]);
-      setChips([]);
-      setTitle("");
-      setDetails("");
-      setPrice("");
-      console.log(commonData);
-
-      alert("Producto subido correctamente!");
-    } catch (error) {
-      setLoading(false);
-      console.error("Error al subir el producto:", error);
-      alert("ERROR INESPERADO: " + error.message);
+    if (!codigoCreado) {
+      setRealMsg("❌ Primero publica el producto para generar el código.");
+      return;
     }
-  };
+    if (realImages.length === 0) {
+      setRealMsg("❌ Selecciona al menos 1 imagen real.");
+      return;
+    }
 
-  //hola mundo cruel
-  console.log("hola mundo cruel");
+    setSavingReal(true);
+    try {
+      const uploaded = await Promise.all(
+        realImages.map((file, i) => uploadRealImageFile(file, i + 1, codigoCreado))
+      );
+      const urls = uploaded.filter(Boolean).slice(0, MAX_REAL_IMAGES);
 
-  // Store data in the 'filtros' node
-  const storeInFiltrosNode = async (codigo, commonData) => {
-    const filtrosRef = ref(database, `GE/Filtros/Nacional/${categ}/${codigo}`);
-    await set(filtrosRef, {
-      Categoria: commonData.Categoria,
-      Subcategoria: commonData.Subcategoria,
-      Precio: commonData.Precio,
-      Stock: commonData.Stock,
-      Imagen: commonData.Imagen,
+      const productoRef = doc(db, "productos", codigoCreado);
+      await updateDoc(productoRef, {
+        Imgreal: true,
+        imagenesreales: urls,
+        id: (videoLinkReal || "").trim(),
+      });
 
-      Titulo: commonData.Titulo,
-      Codigo: commonData.Codigo,
-    });
+      setImagenesReales(urls);
+      setRealImages([]);
+      setRealMsg("✅ Imágenes reales subidas correctamente.");
+    } catch (e) {
+      console.error("❌ Error subiendo imágenes reales:", e);
+      setRealMsg("❌ Error subiendo imágenes reales: " + (e?.message ?? "desconocido"));
+    } finally {
+      setSavingReal(false);
+    }
+  }, [codigoCreado, realImages, uploadRealImageFile, db, videoLinkReal]);
 
-    // Optionally, store the images URLs in the 'filtros' node as well if needed
-  };
-
-  const handleInputChange = (e) => setInputValue(e.target.value);
-  const handleInputChangeStilo = (e) => setInputValues(e.target.value);
-
-  const handleAddChip = (e) => {
-    if (e.key === "Enter" || e.key === ",") {
+  // -------------------------------
+  // Submit principal
+  // -------------------------------
+  const handleSubmit = useCallback(
+    async (e) => {
       e.preventDefault();
-      if (inputValue.trim()) {
-        setChipscolor([
-          ...chipscolor,
-          capitalizeFirstLetter(inputValue.trim()),
-        ]);
+      setLoading(true);
+
+      try {
+        // Validaciones mínimas (igual idea que tu código)
+        const minRequired = selectedsubCategoria === "Pelo" ? 1 : MIN_IMAGES_DEFAULT;
+        if (images.length < minRequired) {
+          throw new Error(`Cuidado!!! Se necesitan al menos ${minRequired} imágenes para continuar.`);
+        }
+        if (!selectedCategoria) throw new Error("Cuidado!!!, no haz seleccionado la categoría");
+        if (!selectedsubCategoria) throw new Error("Cuidado!!!, no haz seleccionado la subcategoría");
+        if (!selectedPeso) throw new Error("Cuidado!!!, no haz seleccionado un peso.");
+
+        if (selectedCategoria === "Moda & Accesorios" && !selectedGender) {
+          throw new Error("Cuidado!!!, no haz seleccionado un género.");
+        }
+
+        if ((!chipscolor || chipscolor.length === 0) && (!chips || chips.length === 0)) {
+          throw new Error("Cuidado!!!, debes agregar al menos un color o un estilo para continuar.");
+        }
+
+        // Crear producto
+        const newItemRef = doc(collection(db, "productos"));
+        const codigo = newItemRef.id;
+
+        const fecha = getCurrentTimeInMilliseconds();
+        let commonData = await prepareCommonData(codigo, fecha);
+
+        // Subir imágenes normales
+        const imageUrls = await uploadImagesToStorage(images);
+
+        // Separar principal/extras
+        const { principal, extraImages } = separateImages(imageUrls);
+
+        commonData.Imagen = principal;
+
+        // Guardar doc principal
+        await setDoc(newItemRef, commonData);
+
+        // Subir extras a subcolección
+        if (extraImages.length > 0) {
+          await uploadExtraImages(codigo, extraImages);
+        }
+
+        // Colores y tallas
+        if (chipscolor.length > 0) await createColorsNode(codigo, chipscolor);
+        if (chips.length > 0) await createSizesNode(codigo, chips, prices);
+
+        await actualizarContador(userName);
+
+        // ✅ Guardar codigo para habilitar sección "imágenes reales"
+        setCodigoCreado(codigo);
+        setImagenesReales([]);
+        setRealImages([]);
+        setVideoLinkReal("");
+        setRealMsg("");
+
+        // Reset del formulario principal (pero NO borres codigoCreado)
+        setImages([]);
+        setChipscolor([]);
+        setChips([]);
+        setPrices({});
+        setTitle("");
+        setDetails("");
+        setPrice("");
+        setCantidad("");
+        setSelectedCategoria(null);
+        setSelectedSubCategoria(null);
+        setSelectedPeso(null);
+        setSelectedDimension(null);
+        setSelectedGender(null);
         setInputValue("");
-      }
-    }
-  };
-  const handleAddChips = (e) => {
-    if (e.key === "Enter" || e.key === ",") {
-      e.preventDefault();
-      if (inputValues.trim()) {
-        setChips([...chips, capitalizeFirstLetter(inputValues.trim())]);
-        setPrices({
-          ...prices,
-          [capitalizeFirstLetter(inputValues.trim())]: "",
-        });
         setInputValues("");
+
+        alert(`✅ Producto subido correctamente! Código: ${codigo}`);
+      } catch (error) {
+        console.error("Error al subir el producto:", error);
+        alert("ERROR INESPERADO: " + (error?.message ?? "desconocido"));
+      } finally {
+        setLoading(false);
       }
-    }
-  };
+    },
+    [
+      images,
+      selectedsubCategoria,
+      selectedCategoria,
+      selectedPeso,
+      selectedGender,
+      chipscolor,
+      chips,
+      db,
+      prepareCommonData,
+      uploadImagesToStorage,
+      separateImages,
+      uploadExtraImages,
+      createColorsNode,
+      createSizesNode,
+      prices,
+      actualizarContador,
+      userName,
+    ]
+  );
 
-  const handleDeleteChip = (chipToDelete) => {
-    setChipscolor(chipscolor.filter((chip) => chip !== chipToDelete));
-  };
-
-  const handleChipClick = (chipValue) => {
-    console.log(chipValue);
-    if (chipValue !== selectedChip) {
-      setSelectedChip(chipValue);
-
-      // fetchData(chipValue);
-    }
-  };
-  const handleChipClick1 = (chipValue) => {
-    if (chipValue !== selectedChip1) {
-      setSelectedChip2(null);
-      setSelectedChip1(chipValue);
-      console.log(chipValue);
-
-      // fetchData(chipValue);
-    }
-  };
-  const handleChipClick2 = (chipValue) => {
-    setSelectedChip2(chipValue);
-  };
-
-  //it is what it is
-
-  const handleDeleteChips = (chipToDelete) => {
-    console.log("wettin");
-    setChips(chips.filter((chip) => chip !== chipToDelete));
-    const updatedPrices = { ...prices };
-    delete updatedPrices[chipToDelete];
-    setPrices(updatedPrices);
-  };
-
-  const handlePriceChanges = (e, chipName) => {
-    setPrices({ ...prices, [chipName]: e.target.value });
-  };
-
-  // Función para leer el archivo Excel y convertirlo en JSON
-  const [data, setData] = useState([]); // Estado para guardar los datos procesados
-
+  // -------------------------------
+  // Render
+  // -------------------------------
   return (
     <>
       {loading && (
@@ -1088,15 +773,14 @@ const Publicar = () => {
           <CircularProgress size={60} color="primary" />
         </Box>
       )}
-      <Box
-        sx={{
-          paddingTop: { xs: 10, sm: 20 }, // para que no quede pegado arriba
-        }}
-      >
+
+      <Box sx={{ paddingTop: { xs: 10, sm: 20 } }}>
         <Cabezal texto={"Publicar Prod"} />
-        <Grid item xs={12}>
+
+        {/* ------------------ Imágenes normales ------------------ */}
+        <Grid item xs={12} sx={{ px: 2 }}>
           <Typography variant="subtitle1" gutterBottom>
-            Minimo 4 Imagenes (Max 9)
+            Mínimo {selectedsubCategoria === "Pelo" ? 1 : MIN_IMAGES_DEFAULT} imágenes (Máx {MAX_IMAGES})
           </Typography>
 
           <input
@@ -1115,271 +799,182 @@ const Publicar = () => {
           </label>
 
           <Box sx={{ mt: 2, display: "flex", flexWrap: "wrap", gap: 2 }}>
-            {images.map((file, index) => {
-              const isLast = index === images.length - 1;
-              const isSecondLast = index === images.length - 2;
-
-              return (
-                <Box key={index}>
-                  <ImagePreview
-                    file={file}
-                    sx={{ border: isLast ? "2px solid red" : "none" }}
-                    onRemove={() => handleRemoveImage(index)}
-                    index={index}
-                  />
-                </Box>
-              );
-            })}
+            {images.map((file, index) => (
+              <Box key={index}>
+                <ImagePreview file={file} onRemove={() => handleRemoveImage(index)} index={index} />
+              </Box>
+            ))}
           </Box>
         </Grid>
-        <Box
-          component="form"
-          onSubmit={handleSubmit}
-          sx={{ padding: 2, paddingTop: 8 }}
-        >
-          <div style={{ width: "100%", padding: 20 }}>
-            <h2 style={{ textAlign: "center" }}>Categorías</h2>
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                justifyContent: "center",
-                marginBottom: 20,
-              }}
-            >
+
+        <Box component="form" onSubmit={handleSubmit} sx={{ padding: 2, paddingTop: 4 }}>
+          {/* ------------------ Categorías ------------------ */}
+          <Box sx={{ width: "100%", p: 2 }}>
+            <Typography variant="h6" textAlign="center" sx={{ mb: 2 }}>
+              Categorías
+            </Typography>
+
+            <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "center", mb: 2 }}>
               {getCategoriasPorUsuario(userName).map((cat) => (
                 <Chip
                   key={cat.nombre}
                   label={cat.nombre}
                   clickable
                   onClick={() => handleCategoriaClick(cat.nombre)}
-                  color={
-                    selectedCategoria === cat.nombre ? "primary" : "default"
-                  }
-                  style={{ margin: 5, fontSize: 14 }}
+                  color={selectedCategoria === cat.nombre ? "primary" : "default"}
+                  sx={{ m: 0.5, fontSize: 14 }}
                 />
               ))}
-            </div>
+            </Box>
 
             {categoriaSeleccionada && (
-              <div
-                style={{
+              <Box
+                sx={{
                   width: "100%",
-                  margin: 10,
-                  padding: 20,
+                  mt: 2,
+                  p: 2,
                   border: "2px solid #ccc",
-                  borderRadius: 10,
+                  borderRadius: 2,
                   position: "relative",
-                  boxSizing: "border-box",
                   backgroundColor: "#fff",
                 }}
               >
-                <span
-                  style={{
+                <Typography
+                  sx={{
                     position: "absolute",
                     top: -12,
                     left: 20,
                     backgroundColor: "#fff",
-                    padding: "0 8px",
+                    px: 1,
                     fontSize: 16,
                     fontWeight: "bold",
                     color: "#333",
                   }}
                 >
                   Subcategorías de {categoriaSeleccionada.nombre}
-                </span>
+                </Typography>
 
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    justifyContent: "center",
-                    width: "100%",
-                  }}
-                >
+                <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "center" }}>
                   {categoriaSeleccionada.subcategorias.map((sub) => (
                     <Chip
                       key={sub}
                       label={sub}
-                      style={{ margin: 5 }}
+                      sx={{ m: 0.5 }}
                       onClick={() => handleChipClickCategoria(sub)}
-                      color={
-                        selectedsubCategoria === sub ? "primary" : "default"
-                      }
+                      color={selectedsubCategoria === sub ? "primary" : "default"}
                       clickable
                     />
                   ))}
-                </div>
-              </div>
+                </Box>
+              </Box>
             )}
-          </div>
+          </Box>
 
+          {/* ------------------ Género (Moda) ------------------ */}
           {categoriaSeleccionada?.nombre === "Moda & Accesorios" && (
-            <div
-              style={{
-                width: "100%",
-                margin: 10,
-                padding: 20,
-                border: "2px solid #ccc",
-                borderRadius: 10,
-                position: "relative",
-                boxSizing: "border-box",
-                backgroundColor: "#fff",
-              }}
-            >
-              <span
-                style={{
+            <Box sx={{ width: "100%", mt: 2, p: 2, border: "2px solid #ccc", borderRadius: 2, position: "relative", backgroundColor: "#fff" }}>
+              <Typography
+                sx={{
                   position: "absolute",
                   top: -12,
                   left: 20,
                   backgroundColor: "#fff",
-                  padding: "0 8px",
+                  px: 1,
                   fontSize: 16,
                   fontWeight: "bold",
                   color: "#333",
                 }}
               >
                 Género
-              </span>
+              </Typography>
 
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  justifyContent: "center",
-                  width: "100%",
-                }}
-              >
-                {["Femenina", "Masculina"].map((gender) => (
+              <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "center" }}>
+                {["Femenina", "Masculina", "Mixto"].map((gender) => (
                   <Chip
                     key={gender}
                     label={gender}
-                    style={{ margin: 5 }}
+                    sx={{ m: 0.5 }}
                     clickable
                     color={selectedGender === gender ? "primary" : "default"}
                     onClick={() => setSelectedGender(gender)}
                   />
                 ))}
-              </div>
-            </div>
+              </Box>
+            </Box>
           )}
-          <div
-            style={{
-              width: "100%",
-              margin: 10,
-              padding: 20,
-              border: "2px solid #ccc",
-              borderRadius: 10,
-              position: "relative",
-              boxSizing: "border-box",
-              backgroundColor: "#fff",
-            }}
-          >
-            <span
-              style={{
+
+          {/* ------------------ Pesos ------------------ */}
+          <Box sx={{ width: "100%", mt: 2, p: 2, border: "2px solid #ccc", borderRadius: 2, position: "relative", backgroundColor: "#fff" }}>
+            <Typography
+              sx={{
                 position: "absolute",
                 top: -12,
                 left: 20,
                 backgroundColor: "#fff",
-                padding: "0 8px",
+                px: 1,
                 fontSize: 16,
                 fontWeight: "bold",
                 color: "#333",
               }}
             >
               Pesos
-            </span>
+            </Typography>
 
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                justifyContent: "center",
-                width: "100%",
-              }}
-            >
+            <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "center" }}>
               {pesos.map((option) => (
                 <Chip
                   key={option.nombre}
-                  label={
-                    option.min == 7
-                      ? "Solo Barco"
-                      : `min ${option.min} - max ${option.max} Kg`
-                  }
-                  style={{ margin: 5 }}
+                  label={option.min === 7 ? "Solo Barco" : `min ${option.min} - max ${option.max} Kg`}
+                  sx={{ m: 0.5 }}
                   clickable
                   onClick={() => handleChipClickPeso(option.nombre)}
                   color={selectedPeso === option.nombre ? "primary" : "default"}
                 />
               ))}
-            </div>
-          </div>
-          {[
-            "Pesado",
-            "Muy pesado",
-            "Extremadamente pesado",
-            "Solo Barco",
-          ].includes(selectedPeso) && (
-            <div
-              style={{
-                width: "100%",
-                margin: 10,
-                padding: 20,
-                border: "2px solid #ccc",
-                borderRadius: 10,
-                position: "relative",
-                boxSizing: "border-box",
-                backgroundColor: "#fff",
-              }}
-            >
-              <span
-                style={{
+            </Box>
+          </Box>
+
+          {/* ------------------ Dimensiones (solo para algunos pesos) ------------------ */}
+          {["Pesado", "Muy pesado", "Extremadamente pesado", "Solo Barco"].includes(selectedPeso) && (
+            <Box sx={{ width: "100%", mt: 2, p: 2, border: "2px solid #ccc", borderRadius: 2, position: "relative", backgroundColor: "#fff" }}>
+              <Typography
+                sx={{
                   position: "absolute",
                   top: -12,
                   left: 20,
                   backgroundColor: "#fff",
-                  padding: "0 8px",
+                  px: 1,
                   fontSize: 16,
                   fontWeight: "bold",
                   color: "#333",
                 }}
               >
                 Dimensiones
-              </span>
+              </Typography>
 
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  justifyContent: "center",
-                  width: "100%",
-                }}
-              >
+              <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "center" }}>
                 {dimensiones.map((option) => (
                   <Chip
                     key={option.nombre}
                     label={`min ${option.min} - max ${option.max} cm³`}
-                    style={{ margin: 5 }}
+                    sx={{ m: 0.5 }}
                     clickable
                     onClick={() => handleChipClickDimension(option.nombre)}
-                    color={
-                      selectedDimension === option.nombre
-                        ? "primary"
-                        : "default"
-                    }
+                    color={selectedDimension === option.nombre ? "primary" : "default"}
                   />
                 ))}
-              </div>
-            </div>
+              </Box>
+            </Box>
           )}
 
-          <Grid container spacing={2}>
+          {/* ------------------ Inputs principales ------------------ */}
+          <Grid container spacing={2} sx={{ mt: 2 }}>
             <Grid item xs={12}>
               <TextField
                 label="Titulo"
                 variant="outlined"
                 value={title}
-                onChange={handleTitleChange}
+                onChange={(e) => setTitle(capitalizeFirstLetter(e.target.value))}
                 required
                 fullWidth
               />
@@ -1391,35 +986,34 @@ const Publicar = () => {
                 variant="outlined"
                 type="number"
                 value={price}
-                onChange={handlePriceChange}
+                onChange={(e) => setPrice(e.target.value)}
                 required
                 fullWidth
                 sx={{
-                  "& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button":
-                    {
-                      WebkitAppearance: "none",
-                      margin: 0,
-                    },
-                  "& input[type=number]": {
-                    MozAppearance: "textfield",
+                  "& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button": {
+                    WebkitAppearance: "none",
+                    margin: 0,
                   },
+                  "& input[type=number]": { MozAppearance: "textfield" },
                 }}
               />
             </Grid>
 
+            {/* stock solo si country !== China; aquí country es China, pero dejo el bloque por si lo cambias */}
             {country !== "China" && (
               <Grid item xs={12}>
                 <TextField
-                  label={`Cantidad en Stock `}
+                  label="Cantidad en Stock"
                   variant="outlined"
                   type="number"
                   value={cantidad}
-                  onChange={handleCantidad}
+                  onChange={(e) => setCantidad(e.target.value)}
                   required
                   fullWidth
                 />
               </Grid>
             )}
+
             <Grid item xs={12}>
               <TextField
                 label="Detalles"
@@ -1427,79 +1021,162 @@ const Publicar = () => {
                 multiline
                 rows={4}
                 value={details}
-                onChange={handleDetailsChange}
+                onChange={(e) => setDetails(e.target.value)}
                 fullWidth
               />
             </Grid>
+
+            {/* ------------------ Colores ------------------ */}
             <Grid item xs={12}>
-              <div style={{ margin: 10 }}>
+              <Box sx={{ m: 1 }}>
                 <Input
                   value={inputValue}
-                  onChange={handleInputChange}
-                  onKeyDown={handleAddChip}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={handleAddChipColor}
                   placeholder="Introduzca Color"
                 />
-                {chipscolor.map((chip, index) => (
-                  <Chip
-                    key={index}
-                    label={chip}
-                    style={{ margin: 3 }}
-                    onDelete={() => handleDeleteChip(chip)}
-                  />
-                ))}
-              </div>
-              <div style={{ margin: 10 }}>
+                <Box sx={{ mt: 1 }}>
+                  {chipscolor.map((chip, index) => (
+                    <Chip
+                      key={index}
+                      label={chip}
+                      sx={{ m: 0.5 }}
+                      onDelete={() => handleDeleteChipColor(chip)}
+                    />
+                  ))}
+                </Box>
+              </Box>
+
+              {/* ------------------ Tallas ------------------ */}
+              <Box sx={{ m: 1 }}>
                 <Input
                   value={inputValues}
-                  onChange={handleInputChangeStilo}
-                  onKeyDown={handleAddChips}
+                  onChange={(e) => setInputValues(e.target.value)}
+                  onKeyDown={handleAddChipTalla}
                   placeholder="Introduzca Estilo"
                 />
-                {chips.map((chip, index) => (
-                  <Box
-                    key={index}
-                    display="flex"
-                    alignItems="center"
-                    marginY={1}
-                  >
-                    <Chip
-                      label={chip}
-                      style={{ margin: 3 }}
-                      onDelete={() => handleDeleteChips(chip)}
-                    />
-                    <TextField
-                      label="Price"
-                      type="number"
-                      value={prices[chip] || ""}
-                      onChange={(e) => handlePriceChanges(e, chip)}
-                      sx={{
-                        "& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button":
-                          {
+                <Box sx={{ mt: 1 }}>
+                  {chips.map((chip, index) => (
+                    <Box key={index} display="flex" alignItems="center" marginY={1} gap={1}>
+                      <Chip label={chip} sx={{ m: 0.5 }} onDelete={() => handleDeleteChipTalla(chip)} />
+                      <TextField
+                        label="Price"
+                        type="number"
+                        value={prices[chip] || ""}
+                        onChange={(e) => handlePriceChanges(e, chip)}
+                        sx={{
+                          "& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button": {
                             WebkitAppearance: "none",
                             margin: 0,
                           },
-                        "& input[type=number]": {
-                          MozAppearance: "textfield",
-                        },
-                      }}
-                    />
-                  </Box>
-                ))}
-              </div>
+                          "& input[type=number]": { MozAppearance: "textfield" },
+                        }}
+                      />
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
             </Grid>
 
-            <Grid
-              item
-              xs={12}
-              display="flex"
-              justifyContent="center"
-              alignItems="center"
-            >
+            {/* ------------------ Publicar ------------------ */}
+            <Grid item xs={12} display="flex" justifyContent="center" alignItems="center">
               <Button type="submit" variant="contained" color="primary">
                 PUBLICAR PRODUCTO
               </Button>
             </Grid>
           </Grid>
+        </Box>
+
+        {/* ========================================================= */}
+        {/* ✅ SECCIÓN NUEVA: IMÁGENES REALES (después de publicar)     */}
+        {/* ========================================================= */}
+        <Box sx={{ mt: 3, px: 2 }}>
+          <Divider sx={{ my: 2 }} />
+
+          <Box sx={{ p: 2, border: "1px solid #ddd", borderRadius: 2 }}>
+            <Typography variant="subtitle1" gutterBottom>
+              Imágenes reales del producto (máx. {MAX_REAL_IMAGES})
+            </Typography>
+
+            <Typography variant="body2" sx={{ opacity: 0.8, mb: 1 }}>
+              Código producto: <b>{codigoCreado || "Aún no publicado"}</b>
+            </Typography>
+
+            {realMsg && (
+              <MUIAlert sx={{ mb: 2 }} severity={realMsg.startsWith("✅") ? "success" : "warning"}>
+                {realMsg}
+              </MUIAlert>
+            )}
+
+            <TextField
+              label="Link del video (se guarda en campo id)"
+              variant="outlined"
+              value={videoLinkReal}
+              onChange={(e) => setVideoLinkReal(e.target.value)}
+              fullWidth
+              placeholder="https://..."
+              sx={{ mb: 2 }}
+              disabled={!codigoCreado || savingReal || loading}
+            />
+
+            <Button variant="outlined" component="label" disabled={!codigoCreado || savingReal || loading}>
+              Seleccionar imágenes reales
+              <input type="file" hidden accept="image/*" multiple onChange={handleRealImagesUpload} />
+            </Button>
+
+            {realImages.length > 0 && (
+              <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: "wrap" }}>
+                {realImages.map((file, i) => (
+                  <Box key={i} sx={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    <Box
+                      component="img"
+                      src={URL.createObjectURL(file)}
+                      alt={`real-new-${i}`}
+                      sx={{ width: 90, height: 90, objectFit: "cover", borderRadius: 2 }}
+                    />
+                    <Button
+                      size="small"
+                      color="error"
+                      onClick={() => handleRemoveRealImage(i)}
+                      disabled={savingReal || loading}
+                    >
+                      Quitar
+                    </Button>
+                  </Box>
+                ))}
+              </Stack>
+            )}
+
+            {imagenesReales.length > 0 && (
+              <>
+                <Typography variant="caption" sx={{ display: "block", mt: 2 }}>
+                  Guardadas actualmente:
+                </Typography>
+                <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap" }}>
+                  {imagenesReales.map((url, i) => (
+                    <Box
+                      key={i}
+                      component="img"
+                      src={url}
+                      alt={`real-saved-${i}`}
+                      sx={{ width: 90, height: 90, objectFit: "cover", borderRadius: 2 }}
+                    />
+                  ))}
+                </Stack>
+              </>
+            )}
+
+            <Button
+              variant="contained"
+              color="secondary"
+              onClick={saveRealMedia}
+              disabled={!codigoCreado || savingReal || loading}
+              fullWidth
+              sx={{ mt: 2 }}
+            >
+              {savingReal ? "Subiendo..." : "SUBIR IMÁGENES REALES"}
+            </Button>
+          </Box>
         </Box>
       </Box>
     </>

@@ -14,6 +14,7 @@ import FeedBack from "./componentes/FeedBack";
 import Pagos from "./componentes/Pagos";
 import Succes from "./componentes/Succes";
 import ProductoTodo from "./ProductosTodo";
+import Ajustes from "./Ajustes";
 
 // Lazy loading components
 const Nacional = lazy(() => import("./Nacional"));
@@ -86,6 +87,8 @@ export const Routing = React.memo(() => {
               <Route path="/Pagos" element={<Pagos />} />
               <Route path="/Pagos/Success" element={<Succes />} />
               <Route path="/Buscar" element={<ProductoTodo />} />
+              <Route path="/Ajustes" element={<Ajustes />} />
+
               <Route
                 path="/Buscar/Editar/:codigo/:contexto"
                 element={<EditarPost />}

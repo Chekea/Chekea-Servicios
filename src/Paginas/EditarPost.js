@@ -1,67 +1,94 @@
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Box,
-  IconButton,
+  Button,
   Chip,
-  Input,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
   Drawer,
+  Grid,
+  IconButton,
+  Stack,
   TextField,
   Typography,
-  Button,
-  Grid,
-  CircularProgress,
-  FormControlLabel,
-  Switch,
-  useTheme,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
+  Alert as MUIAlert,
   useMediaQuery,
+  useTheme,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+
+// ✅ RTDB (Realtime Database)
+import { getDatabase, ref as rtdbRef, remove, update as rtdbUpdate } from "firebase/database";
+
+// ✅ Storage
 import {
-  get,
-  ref,
-  remove,
-  getDatabase,
-  push,
-  set,
-  update,
-  onValue,
-  query,
-  equalTo,
-  orderByChild,
-} from "firebase/database";
-import { getStorage, ref as storageRef, deleteObject } from "firebase/storage";
-import { getAuth } from "firebase/auth";
+  getStorage,
+  ref as storageRef,
+  deleteObject,
+  uploadBytes,
+  getDownloadURL,
+} from "firebase/storage";
+
+// ✅ Firestore
 import {
-  doc,
   collection,
-  getDocs,
-  onSnapshot,
-  getFirestore,
-  getDoc,
-  updateDoc,
-  addDoc,
   deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  getFirestore,
+  increment,
   setDoc,
+  updateDoc,
 } from "firebase/firestore";
 
+// ✅ Router (lo normal es react-router-dom)
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+
 import app from "./../Servicios/firebases";
-import { useNavigate, useParams } from "react-router";
 import Cabezal from "./componentes/Cabezal";
 import Alert from "./componentes/Alert";
+import { compressImage } from "../ayuda";
 
+// ---------------------- Constantes ----------------------
+const MAX_FILE_MB = 6;
+const MAX_REAL_IMAGES = 2;
+
+// PESOS (AÉREO)
+const PESOS = [
+  { nombre: "Ultraligero", min: 0.1, max: 0.5 },
+  { nombre: "Ligero", min: 0.51, max: 1.1 },
+  { nombre: "Medio", min: 1.2, max: 2.0 },
+  { nombre: "Pesado", min: 2.01, max: 3.5 },
+  { nombre: "Muy pesado", min: 3.51, max: 4.5 },
+];
+
+// Subcategorías
+const SUBCATEGORIAS_MODA = [
+  "Trajes",
+  "Vestidos",
+  "Bolsos",
+  "Pantalones",
+  "Calzado",
+  "Camisas",
+  "Otros",
+];
+
+// Género
+const GENEROS = ["Femenina", "Masculina", "Mixto"];
+
+// ---------------------- Alert descuento ----------------------
 const AlertComponent = ({ isOpen, onClose, onConfirm }) => {
   const [inputValue, setInputValue] = useState("");
 
   const handleConfirm = () => {
-    if (inputValue < 90) {
-      onConfirm(inputValue);
-    } else {
-      alert("Ha ocurido un error");
-    }
+    const v = Number(inputValue);
+    if (Number.isFinite(v) && v < 90) onConfirm(v);
+    else alert("Ha ocurido un error");
     onClose();
   };
 
@@ -88,60 +115,164 @@ const AlertComponent = ({ isOpen, onClose, onConfirm }) => {
     </Dialog>
   );
 };
+
+// ---------------------- Componente principal ----------------------
 const EditarPost = () => {
+  const { codigo, contexto } = useParams(); // contexto puede venir o no
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const fromAjustes = Boolean(location.state?.fromAjustes);
+  const userName = String(location.state?.userName ?? "");
+
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+
+  const db = getFirestore(app);
+  const database = getDatabase(app);
+
+  // ---------------------- Estado principal ----------------------
+  const [data, setData] = useState(null);
+  const [img, setImg] = useState(false);
+
   const [title, setTitle] = useState("");
   const [price, setPrice] = useState("");
-  const [dimension, setDimension] = useState("");
-  const [espacio, setEspacio] = useState("");
-  const [data, setData] = useState(null);
-
-  const [cantidad, setCantidad] = useState("");
-  const [stock, setStock] = useState(false);
-
-  const [ubicacion, setUbicacion] = useState("");
-  const [loading, setLoading] = useState(false); // Loading state
-
   const [details, setDetails] = useState("");
-  const [images, setImages] = useState([]);
-  const [selectedChip, setSelectedChip] = useState("Aerea");
-  const [chipData, setChipData] = useState([]);
-  const [showbox, setShowBox] = useState(true);
+  const [ubicacion, setUbicacion] = useState("");
 
+  // Chips
   const [chipscolor, setChipscolor] = useState([]);
-  const [chipscoloradd, setChipscoloradd] = useState([]);
-
   const [chips, setChips] = useState([]);
-  const [chipsnew, setChipsnew] = useState([]);
 
-  const [prices, setPrices] = useState({});
-  const [inputValue, setInputValue] = useState("");
-  const [inputValues, setInputValues] = useState("");
-  const [view, setView] = useState("");
-  const database = getDatabase(app);
-  const theme = useTheme();
-
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-  const { codigo, contexto } = useParams(); // Access the URL parameter
-  const [isAlertOpen, setIsAlertOpen] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [tovalue, setToValue] = useState(false);
-  const [todelete, setToDelete] = useState("");
+  // Drawer chips
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [drawerType, setDrawerType] = useState("color"); // "color" o "talla"
-  const [dataChip, setDataChip] = useState(null); // chip que estamos editando
-  const [newColor, setNewColor] = useState(""); // título del chip
-  const [newPrice, setNewPrice] = useState(""); // precio (solo para talla)
+  const [drawerType, setDrawerType] = useState("color"); // "color" | "talla"
+  const [dataChip, setDataChip] = useState(null);
+  const [newColor, setNewColor] = useState("");
+  const [newPrice, setNewPrice] = useState("");
 
-  const navigate = useNavigate();
-  const db = getFirestore(app);
+  // Delete chip confirm
+  const [open, setOpen] = useState(false);
+  const [todelete, setToDelete] = useState(null);
 
+  // Descuento
+  const [isAlertOpen, setIsAlertOpen] = useState(false);
+  const [number, setNumber] = useState(null);
+
+  // Peso
+  const [selectedPeso, setSelectedPeso] = useState("");
+  const [pesoActual, setPesoActual] = useState("");
+  const [savingPeso, setSavingPeso] = useState(false);
+  const [pesoMsg, setPesoMsg] = useState("");
+
+  // Subcategoría/Género
+  const [selectedSubcategoria, setSelectedSubcategoria] = useState("");
+  const [subcategoriaActual, setSubcategoriaActual] = useState("");
+
+  const [selectedGenero, setSelectedGenero] = useState("");
+  const [generoActual, setGeneroActual] = useState("");
+
+  const [savingSubGenero, setSavingSubGenero] = useState(false);
+  const [subGeneroMsg, setSubGeneroMsg] = useState("");
+
+  // Media
+  const [videoLink, setVideoLink] = useState("");
+  const [realImages, setRealImages] = useState([]);
+  const [imagenesReales, setImagenesReales] = useState([]);
+  const [savingMedia, setSavingMedia] = useState(false);
+  const [mediaMsg, setMediaMsg] = useState("");
+
+  // Guardado principal
+  const [savingMain, setSavingMain] = useState(false);
+  const [mainMsg, setMainMsg] = useState("");
+
+  // Loading global
+  const [loading, setLoading] = useState(false);
+
+  // ---------------------- Helpers ----------------------
+  const MARGEN = useCallback((preciobase) => {
+    const p = Number(preciobase || 0);
+    if (p <= 7000) return p > 0 ? p * 1.3 + 1500 : 0;
+    if (p <= 25000) return p * 1.22 + 1000;
+    if (p <= 250000) return p * 1.15;
+    if (p <= 500000) return p * 1.12;
+    return p * 1.08 + 100000;
+  }, []);
+
+  const lugar = useCallback(
+    (pais) => (pais === "Guinea Ecuatorial" ? "Nacional" : "Exterior"),
+    []
+  );
+
+  const savingAny = useMemo(
+    () => loading || savingMain || savingMedia || savingPeso || savingSubGenero,
+    [loading, savingMain, savingMedia, savingPeso, savingSubGenero]
+  );
+
+  // ---------------------- Cargar producto + subcolecciones ----------------------
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const productRef = doc(db, "productos", codigo);
+        const docSnap = await getDoc(productRef);
+
+        if (!docSnap.exists()) {
+          setData(null);
+          setChips([]);
+          setChipscolor([]);
+          return;
+        }
+
+        const productData = docSnap.data();
+        setData(productData);
+
+        setImg(Boolean(productData.Imgreal));
+        setTitle(productData.Titulo ?? "");
+        setUbicacion(productData.Ubicacion ?? "");
+        setPrice(productData.Precio ?? "");
+        setDetails(productData.Detalles ?? "");
+
+        // Subcat/Género
+        const subFromDB = productData?.Subcategoria ?? "";
+        const genFromDB = productData?.Genero ?? "";
+        setSubcategoriaActual(subFromDB);
+        setSelectedSubcategoria(subFromDB);
+        setGeneroActual(genFromDB);
+        setSelectedGenero(genFromDB);
+
+        // Peso
+        const pesoFromDB = productData?.Peso ?? "";
+        setPesoActual(pesoFromDB);
+        setSelectedPeso(pesoFromDB);
+
+        // Media
+        setVideoLink(productData.id ?? "");
+        setImagenesReales(productData.imagenesreales ?? []);
+
+        // Subcolecciones
+        const coloresRef = collection(db, "productos", codigo, "colores");
+        const tallasRef = collection(db, "productos", codigo, "tallas");
+        const [coloresSnap, tallasSnap] = await Promise.all([
+          getDocs(coloresRef),
+          getDocs(tallasRef),
+        ]);
+
+        setChipscolor(coloresSnap.docs.map((d) => d.data()) ?? []);
+        setChips(tallasSnap.docs.map((d) => d.data()) ?? []);
+      } catch (error) {
+        console.error("❌ Error al obtener datos:", error);
+      }
+    };
+
+    if (codigo) fetchData();
+  }, [db, codigo]);
+
+  // ---------------------- Drawer chips ----------------------
   const handleDrawerOpen = (type, chip = null) => {
     setDrawerType(type);
     setDataChip(chip);
 
     if (chip) {
-      // si es un chip de tipo "talla" con precio
-      console.log(chip.precio, "hoal");
       if (type === "talla") {
         setNewColor(chip.label ?? "");
         setNewPrice(chip.precio ?? 0);
@@ -150,7 +281,6 @@ const EditarPost = () => {
         setNewPrice("");
       }
     } else {
-      // si vamos a agregar un chip nuevo
       setNewColor("");
       setNewPrice("");
     }
@@ -159,246 +289,349 @@ const EditarPost = () => {
   };
 
   const handleDrawerClose = () => setDrawerOpen(false);
-  const MARGEN = (preciobase) => {
-    if (preciobase <= 7000) {
-      return preciobase > 0 ? preciobase * 1.3 + 1500 : 0;
-    } else if (preciobase <= 25000) {
-      return preciobase * 1.22 + 1000;
-    } else if (preciobase <= 250000) {
-      return preciobase * 1.15;
-    } else if (preciobase <= 500000) {
-      return preciobase * 1.12;
-    } else {
-      return preciobase * 1.08 + 100000;
-    }
-  };
+
   const handleSaveNew = async () => {
     if (!newColor) return;
+
     const productoRef = doc(db, "productos", codigo);
 
-    if (drawerType === "color") {
-      if (dataChip) {
-        // Editar color existente
-        setChipscolor((prev) =>
-          prev.map((c) =>
-            c.id === dataChip.id ? { ...c, label: newColor } : c
-          )
-        );
-
-        const colorRef = doc(collection(productoRef, "colores"), dataChip.id);
-        await updateDoc(colorRef, { label: newColor });
-        console.log("Color editado:", newColor);
+    try {
+      if (drawerType === "color") {
+        if (dataChip?.id) {
+          setChipscolor((prev) =>
+            prev.map((c) => (c.id === dataChip.id ? { ...c, label: newColor } : c))
+          );
+          const colorRef = doc(collection(productoRef, "colores"), dataChip.id);
+          await updateDoc(colorRef, { label: newColor });
+        } else {
+          const newDocRef = doc(collection(productoRef, "colores"));
+          const newObj = { id: newDocRef.id, label: newColor };
+          await setDoc(newDocRef, newObj);
+          setChipscolor((prev) => [...prev, newObj]);
+        }
       } else {
-        // Crear nuevo color con ID dentro del documento
-        const newDocRef = doc(collection(productoRef, "colores")); // genera ID
-        const newColorObj = {
-          id: newDocRef.id,
+        const precios = parseInt(MARGEN(newPrice), 10);
+        const chipObj = {
           label: newColor,
+          precio: Number.isFinite(precios) ? precios : 0,
         };
 
-        // Guardar documento en Firestore
-        await setDoc(newDocRef, newColorObj);
-
-        // Actualizar estado local
-        setChipscolor((prev) => [...prev, newColorObj]);
-        console.log("Color nuevo guardado:", newColorObj);
+        if (dataChip?.id) {
+          setChips((prev) =>
+            prev.map((c) => (c.id === dataChip.id ? { ...c, ...chipObj } : c))
+          );
+          const tallaRef = doc(collection(productoRef, "tallas"), dataChip.id);
+          await updateDoc(tallaRef, { id: dataChip.id, ...chipObj });
+        } else {
+          const newTallaRef = doc(collection(productoRef, "tallas"));
+          const newObj = { id: newTallaRef.id, ...chipObj };
+          await setDoc(newTallaRef, newObj);
+          setChips((prev) => [...prev, newObj]);
+        }
       }
-    } else {
-      // Manejo de tallas
-      let precios = parseInt(MARGEN(newPrice));
-      const chipObj = { label: newColor, precio: precios || 0 };
-      if (dataChip) {
-        // Editar talla existente
-        setChips((prev) =>
-          prev.map((c) =>
-            c.id === dataChip.id
-              ? { ...c, label: newColor, precio: precios }
-              : c
-          )
-        );
-
-        const tallaRef = doc(collection(productoRef, "tallas"), dataChip.id);
-        // await updateDoc(tallaRef, chipObj);
-        console.log("Talla editada:", chipObj);
-      } else {
-        // Crear nueva talla
-        const newTallaRef = doc(collection(productoRef, "tallas")); // genera ID
-        const newTallaObj = { id: newTallaRef.id, ...chipObj };
-
-        await setDoc(newTallaRef, newTallaObj);
-        setChips((prev) => [...prev, newTallaObj]);
-        console.log("Talla nueva guardada:", newTallaObj);
-      }
+    } catch (e) {
+      console.error("❌ Error guardando chip:", e);
+      alert("Error guardando: " + (e?.message ?? "desconocido"));
+    } finally {
+      setDataChip(null);
+      setNewColor("");
+      setNewPrice("");
+      setDrawerOpen(false);
     }
-
-    // limpiar estados y cerrar Drawer
-    setDataChip(null);
-    setChipscolor([]);
-    setChips([]);
-    setNewColor("");
-    setNewPrice("");
-    setOpen(false);
-
-    setDrawerOpen(false);
   };
 
-  console.log(codigo);
-  const [number, setNumber] = useState(null);
-  const handleOpenAlert = () => {
-    setIsAlertOpen(true);
+  // ---------------------- Delete chip ----------------------
+  const handleDeleteChip = (chipToDelete, tipo) => {
+    setOpen(true);
+    setToDelete(chipToDelete);
+    setDrawerType(tipo);
+  };
+  const handleCloses = () => setOpen(false);
+
+  const handleConfirmDeleteChip = async () => {
+    try {
+      const isColor = drawerType === "color";
+      const subcollection = isColor ? "colores" : "tallas";
+
+      if (isColor) setChipscolor((prev) => prev.filter((c) => c.id !== todelete.id));
+      else setChips((prev) => prev.filter((c) => c.id !== todelete.id));
+
+      const productoRef = doc(db, "productos", codigo);
+      const chipRef = doc(collection(productoRef, subcollection), todelete.id);
+      await deleteDoc(chipRef);
+    } catch (error) {
+      console.error("❌ Error eliminando chip:", error);
+    } finally {
+      handleCloses();
+    }
   };
 
-  const handleCloseAlert = () => {
-    setIsAlertOpen(false);
+  // ---------------------- Descuento ----------------------
+  const ActualizarDescuento = async (dato) => {
+    try {
+      const valor = parseInt(dato, 10);
+      const context = lugar(data?.Pais);
+
+      const dbRef = rtdbRef(database, `GE/${context}/Prod/${codigo}`);
+      await rtdbUpdate(dbRef, { Descuento: valor });
+
+      if (valor > 0) {
+        const rebajasRef1 = rtdbRef(
+          database,
+          `GE/Filtros/${context}/${data?.Categoria}/${codigo}`
+        );
+        await rtdbUpdate(rebajasRef1, { Descuento: valor });
+      } else {
+        const rebajasRef = rtdbRef(database, `GE/Rebajas/${codigo}`);
+        await remove(rebajasRef);
+      }
+    } catch (error) {
+      console.error("Error updating data: ", error);
+    }
   };
 
   const handleConfirmAlert = (value) => {
     setNumber(value);
     ActualizarDescuento(value);
   };
-  const handleOpen = () => {
-    setOpen(true);
-  };
 
-  const handleCloses = () => {
-    setOpen(false);
-  };
+  // ---------------------- Guardar Peso ----------------------
+  const savePeso = useCallback(async () => {
+    setPesoMsg("");
+    if (!selectedPeso) {
+      setPesoMsg("❌ Selecciona un peso antes de guardar.");
+      return;
+    }
 
-  const handleConfirm = async () => {
+    setSavingPeso(true);
     try {
-      const isColor = drawerType === "color"; // 👈 Usa el mismo estado global
-      const subcollection = isColor ? "colores" : "tallas";
-
-      console.log(todelete, drawerType);
-
-      if (isColor) {
-        setChipscolor((prev) => prev.filter((chip) => chip.id !== todelete.id));
-      } else {
-        setChips((prev) => prev.filter((chip) => chip.id !== todelete.id));
-      }
-
-      console.log(todelete.id, "eliminar");
-      if (!todelete.id) return;
-
       const productoRef = doc(db, "productos", codigo);
-      const chipRef = doc(collection(productoRef, subcollection), todelete.id);
-      await deleteDoc(chipRef);
-
-      console.log(
-        `✅ ${isColor ? "Color" : "Talla"} '${
-          todelete.label
-        }' eliminado de Firestore.`
-      );
-    } catch (error) {
-      console.error("❌ Error eliminando chip:", error);
+      await updateDoc(productoRef, { Peso: selectedPeso });
+      setPesoActual(selectedPeso);
+      setPesoMsg("✅ Peso guardado correctamente.");
+    } catch (e) {
+      console.error(e);
+      setPesoMsg("❌ Error guardando peso: " + (e?.message ?? "desconocido"));
+    } finally {
+      setSavingPeso(false);
     }
-    handleCloses();
-  };
+  }, [db, codigo, selectedPeso]);
 
-  const handleTitleChange = (e) => setTitle(e.target.value);
-  const handlePriceChange = (e) => setPrice(e.target.value);
-  const handleDimension = (e) => setDimension(e.target.value);
-  const handleEspacio = (e) => setEspacio(e.target.value);
+  // ---------------------- Guardar Subcategoría + Género ----------------------
+  const saveSubcategoriaGenero = useCallback(async () => {
+    setSubGeneroMsg("");
 
-  const handleCantidad = (e) => setCantidad(e.target.value);
+    const esModa = (data?.Categoria ?? "").toLowerCase().includes("moda");
+    if (!esModa) {
+      setSubGeneroMsg("❌ Este producto no es de Moda & Accesorios.");
+      return;
+    }
 
-  const handleUbicacion = (e) => setUbicacion(e.target.value);
+    if (!selectedSubcategoria) {
+      setSubGeneroMsg("❌ Selecciona una subcategoría antes de guardar.");
+      return;
+    }
+    if (!selectedGenero) {
+      setSubGeneroMsg("❌ Selecciona un género antes de guardar.");
+      return;
+    }
 
-  const handleDetailsChange = (e) => setDetails(e.target.value);
-
-  const getCurrentTimeInMilliseconds = () => {
-    return Date.now();
-  };
-  //nuevo abajo
-
-  const lugar = (pais) => {
-    // Implement your `lugar` function logic here
-    // Example:
-    return pais === "Guinea Ecuatorial" ? "Nacional" : "Exterior";
-  };
-  const ActualizarDescuento = async (dato) => {
-    let valor = parseInt(dato);
-    let context = lugar(data.Pais);
-
-    const dbRef = ref(database, `GE/${context}/Prod/${codigo}`);
-
+    setSavingSubGenero(true);
     try {
-      // Update the discount value
-      console.log(dato, "existe");
-      await update(dbRef, { Descuento: valor });
+      const productoRef = doc(db, "productos", codigo);
+      await setDoc(
+        productoRef,
+        { Subcategoria: selectedSubcategoria, Genero: selectedGenero },
+        { merge: true }
+      );
 
-      if (valor > 0) {
-        // If valor is not 0, update the Rebajas node
-        const rebajasRef = ref(database, `GE/Rebajas/${codigo}`);
-        const rebajasRef1 = ref(
-          database,
-          `GE/Filtros/${context}/${data.Categoria}/${codigo}`
-        );
-        const rebajasRef2 = ref(database, `GE/${context}/Prod/${codigo}`);
+      setSubcategoriaActual(selectedSubcategoria);
+      setGeneroActual(selectedGenero);
 
-        // await update(rebajasRef, diccionario1);
-        await update(rebajasRef1, { Descuento: valor });
-      } else {
-        // If valor is 0, remove the Rebajas node
-        const rebajasRef = ref(database, `GE/Rebajas/${codigo}`);
-        const rebajasRef1 = ref(
-          database,
-          `Filtros/${context}/${data.Categoria}/${codigo}`
-        );
-        await update(rebajasRef1, { Descuento: valor });
+      setSubGeneroMsg("✅ Subcategoría y género guardados correctamente.");
+    } catch (e) {
+      console.error(e);
+      setSubGeneroMsg("❌ Error guardando: " + (e?.message ?? "desconocido"));
+    } finally {
+      setSavingSubGenero(false);
+    }
+  }, [db, codigo, selectedSubcategoria, selectedGenero, data?.Categoria]);
 
-        await remove(rebajasRef);
+  // ---------------------- Media (imágenes reales) ----------------------
+  const handleRealImagesUpload = useCallback(
+    async (event) => {
+      const input = event.target;
+      const files = Array.from(input.files || []);
+      if (files.length === 0) return;
+
+      if (files.length + realImages.length > MAX_REAL_IMAGES) {
+        alert(`Solo puedes subir ${MAX_REAL_IMAGES} imágenes reales.`);
+        input.value = "";
+        return;
       }
 
-      console.log("Data updated successfully");
+      try {
+        const processed = await Promise.all(
+          files.map(async (file) => {
+            if (!file.type.startsWith("image/")) {
+              throw new Error(`Archivo no permitido: ${file.name}`);
+            }
+            if (file.size / 1024 / 1024 > MAX_FILE_MB) {
+              throw new Error(`Imagen muy grande (${MAX_FILE_MB}MB máx): ${file.name}`);
+            }
 
-      // Simulate dismissing a loading indicator and enabling user interaction
-      // Implement your actual UI update logic here
-      // For example, using React state:
-      // setLoading(false);
-      // setUserInteractionEnabled(true);
+            const webpFile = await compressImage(file, {
+              maxWidth: 1200,
+              maxHeight: 900,
+              quality: 0.8,
+            });
+
+            return webpFile;
+          })
+        );
+
+        setRealImages((prev) => [...prev, ...processed]);
+        setMediaMsg("");
+      } catch (error) {
+        console.error("Real image processing failed:", error);
+        alert(error?.message ?? "Error procesando imágenes");
+      } finally {
+        input.value = "";
+      }
+    },
+    [realImages.length]
+  );
+
+  const handleRemoveRealImage = (index) => {
+    setRealImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const uploadRealImageFile = async (file, index) => {
+    const storage = getStorage(app);
+    const path = `productos/${codigo}/imagenesreales/${index}_${Date.now()}_${file.name}`;
+    const fileRef = storageRef(storage, path);
+    await uploadBytes(fileRef, file);
+    return await getDownloadURL(fileRef);
+  };
+
+  async function actualizarContador(username) {
+    try {
+      const userMap = {
+        1: "as",
+        "01": "maysa",
+        "001": "Esteban",
+      };
+
+      const nombreCampo = userMap[username];
+      if (!nombreCampo) return;
+
+      const refDoc = doc(db, "GE_Info", "Nombres");
+      const snapshot = await getDoc(refDoc);
+      if (snapshot.exists()) {
+        await updateDoc(refDoc, { [nombreCampo]: increment(1) });
+      }
     } catch (error) {
-      console.error("Error updating data: ", error);
+      console.error("❌ Error al actualizar contador:", error);
+    }
+  }
+
+  const saveMedia = async () => {
+    setMediaMsg("");
+    setSavingMedia(true);
+
+    try {
+      const productoRef = doc(db, "productos", codigo);
+
+      const payload = { id: videoLink?.trim() || "" };
+
+      if (realImages.length > 0) {
+        const uploaded = await Promise.all(
+          realImages.map((file, i) => uploadRealImageFile(file, i + 1))
+        );
+        const urls = uploaded.filter(Boolean).slice(0, 2);
+        payload.imagenesreales = urls;
+
+        setImagenesReales(urls);
+        setRealImages([]);
+      }
+
+      payload.Imgreal = true;
+
+      if (userName) await actualizarContador(userName);
+
+      await updateDoc(productoRef, payload);
+      setMediaMsg("✅ Media subida correctamente.");
+    } catch (e) {
+      console.error(e);
+      setMediaMsg("❌ Error subiendo media: " + (e?.message ?? "desconocido"));
+    } finally {
+      setSavingMedia(false);
     }
   };
 
-  const handleDeleteChip = async (chipToDelete, valor) => {
-    setOpen(true);
-    setToDelete(chipToDelete);
-    console.log(chipToDelete, "a elimianr");
-    setDrawerType(valor);
-  };
+  // ---------------------- Guardar datos principales ----------------------
+  const saveMain = async () => {
+    setMainMsg("");
+    setSavingMain(true);
+    try {
+      const productoRef = doc(db, "productos", codigo);
 
-  const handlePriceChanges = (e, chipName) => {
-    setPrices({ ...prices, [chipName]: e.target.value });
-  };
-  const handleButtonClick = (view) => {
-    setShowBox(false);
-    setView(view);
-    // Perform any additional actions based on the selected view
-    console.log(`Selected view: ${view}`);
-  };
-  const chipOptions1 = [
-    { label: "Aerea", value: "Aerea" },
-    { label: "Maritima", value: "Maritima" },
-  ];
+      const updatedObject = {
+        Titulo: title,
+        Precio: parseInt(MARGEN(price), 10),
+        Detalles: details,
+        Ubicacion: ubicacion ?? "",
+      };
 
-  const confirmarEliminacion = (codigo) => {
-    if (!codigo) {
-      alert("Código del producto no válido.");
-      return false;
+      await updateDoc(productoRef, updatedObject);
+      setMainMsg("✅ Datos guardados correctamente.");
+    } catch (e) {
+      console.error(e);
+      setMainMsg("❌ Error guardando datos: " + (e?.message ?? "desconocido"));
+    } finally {
+      setSavingMain(false);
     }
-    console.log(codigo, "wettin");
-    return window.confirm(
-      "¿Seguro que quieres eliminar este producto y todas sus imágenes?"
-    );
   };
 
-  const eliminarDocumentoFirestore = async (codigo) => {
-    const db = getFirestore(app);
-    const ref = doc(db, "productos", codigo);
-    await deleteDoc(ref);
-    console.log("✅ Documento eliminado de Firestore");
+  // ---------------------- Eliminar producto completo ----------------------
+  const confirmarEliminacion = (cod) => {
+    if (!cod) return false;
+    return window.confirm("¿Seguro que quieres eliminar este producto y todas sus imágenes?");
+  };
+
+  const getPathFromUrl = (url) => {
+    try {
+      const parts = url.split("?")[0].split("/o/")[1];
+      return decodeURIComponent(parts);
+    } catch {
+      return null;
+    }
+  };
+
+  const eliminarImagenes = async (imagenes = []) => {
+    const storage = getStorage(app);
+    for (const imgPath of imagenes) {
+      try {
+        const path = imgPath.startsWith("https") ? getPathFromUrl(imgPath) : imgPath;
+        if (!path) continue;
+        const imgRef = storageRef(storage, path);
+        await deleteObject(imgRef);
+      } catch (error) {
+        console.warn(`No se pudo eliminar la imagen ${imgPath}:`, error);
+      }
+    }
+  };
+
+  const eliminarDocumentoFirestore = async (cod) => {
+    const refDoc = doc(db, "productos", cod);
+    await deleteDoc(refDoc);
+  };
+
+  const obtenerProducto = async (cod) => {
+    const productoRef = doc(db, "productos", cod);
+    const productoSnap = await getDoc(productoRef);
+    if (!productoSnap.exists()) throw new Error("El producto no existe en Firestore.");
+    return productoSnap.data();
   };
 
   const eliminarPostCompleto = async () => {
@@ -422,147 +655,15 @@ const EditarPost = () => {
     }
   };
 
-  const obtenerProducto = async (codigo) => {
-    const db = getFirestore(app);
-    const productoRef = doc(db, "productos", codigo);
-    const productoSnap = await getDoc(productoRef);
-
-    if (!productoSnap.exists()) {
-      throw new Error("El producto no existe en Firestore.");
-    }
-
-    return productoSnap.data();
-  };
-
-  const eliminarImagenes = async (imagenes = []) => {
-    const storage = getStorage(app);
-
-    for (const imgPath of imagenes) {
-      try {
-        const path = imgPath.startsWith("https")
-          ? getPathFromUrl(imgPath)
-          : imgPath;
-
-        const imgRef = storageRef(storage, path);
-        await deleteObject(imgRef);
-        console.log(`🗑 Imagen eliminada: ${path}`);
-      } catch (error) {
-        console.warn(`No se pudo eliminar la imagen ${imgPath}:`, error);
-      }
-    }
-  };
-
-  // Helper para convertir URL → ruta interna del Storage
-  const getPathFromUrl = (url) => {
-    try {
-      const parts = url.split("?")[0].split("/o/")[1];
-      return decodeURIComponent(parts);
-    } catch {
-      return null;
-    }
-  };
-
-  useEffect(() => {
-    const fetchData = async (codigo) => {
-      try {
-        // 1) Referencia al documento producto
-        const productRef = doc(db, "productos", codigo);
-
-        // 2) Leer el documento (getDoc)
-        const docSnap = await getDoc(productRef);
-
-        if (!docSnap.exists()) {
-          console.log("❌ No existe el documento del producto:", codigo);
-          // limpiar estados si hace falta
-          setData(null);
-          setChips([]);
-          setChipscolor([]);
-          return;
-        }
-
-        const productData = docSnap.data();
-        setData(productData);
-
-        // actualizar campos principales (comprueba nombres exactos en Firestore)
-        setTitle(productData.Titulo ?? "");
-        setUbicacion(productData.Ubicacion ?? "");
-        setPrice(productData.Precio ?? "");
-        setDetails(productData.Detalles ?? "");
-        setStock(productData.Stock ?? "");
-
-        console.log("Producto Data:", productData);
-
-        // 3) Leer subcolecciones en paralelo (más rápido)
-        const coloresRef = collection(db, "productos", codigo, "colores");
-        const tallasRef = collection(db, "productos", codigo, "tallas");
-
-        const [coloresSnap, tallasSnap] = await Promise.all([
-          getDocs(coloresRef),
-          getDocs(tallasRef),
-        ]);
-
-        // 4) Mapear colores (asegurarse de que label existe)
-        const colores = coloresSnap.docs.map((doc) => doc.data());
-        // 5) Mapear tallas
-        const tallas = tallasSnap.docs.map((doc) => doc.data());
-
-        console.log("Colores:", colores);
-
-        setChipscolor(colores ? colores : []);
-        setChips(tallas ? tallas : []);
-      } catch (error) {
-        console.error("❌ Error al obtener datos:", error);
-      }
-    };
-
-    fetchData(codigo);
-
-    // Cleanup function to unsubscribe when component unmounts
-    return () => {
-      // Unsubscribe from database
-    };
-  }, []);
-  const handleToggleChange = (event) => {
-    setStock(event.target.checked);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true); // Start loading
-    //CUando toca eliminar agregar se guardan los nombres y se hace un map iterando todo
-    // para asi conseguir codigo
-    //verificar el error en tallas
-
-    const updatedObject = {
-      Titulo: title,
-      Precio: parseInt(MARGEN(price)),
-      // Cantidad: parseInt(cantidad),
-      Detalles: details,
-      // Stock: stock,
-      // Espacio: contexto === "Exterior" ? parseFloat(espacio) : 0,
-      // Dimension: dimension !== undefined ? parseFloat(dimension) : 1.5,
-      // Categoria: data.Categoria,
-    };
-
-    // Documento principal del producto
-    const productoRef = doc(db, "productos", codigo);
-
-    try {
-      await updateDoc(productoRef, updatedObject);
-      alert("Producto modificado correctamente!");
-      setLoading(false);
-      console.log("Producto actualizado correctamente.");
-    } catch (error) {
-      setLoading(false);
-      alert("ERROR INESPERADO: " + error.message);
-      console.error("Error al actualizar el producto:", error);
-      // Aquí puedes mostrar un mensaje al usuario, por ejemplo con un toast
-    }
-  };
+  // ---------------------- UI ----------------------
+  const esModa = useMemo(
+    () => (data?.Categoria ?? "").toLowerCase().includes("moda"),
+    [data?.Categoria]
+  );
 
   return (
     <>
-      {loading && (
+      {savingAny && (
         <Box
           sx={{
             position: "fixed",
@@ -581,150 +682,366 @@ const EditarPost = () => {
         </Box>
       )}
 
-      <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2, padding: 2 }}>
+      <Box sx={{ mt: 2, padding: 2 }}>
         <Cabezal texto={"Editar"} />
 
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-end",
-            justifyContent: "flex-end",
-            marginTop: isMobile ? 40 : 0,
-          }}
-        >
-          <Button
-            variant="contained"
-            color="error"
-            onClick={eliminarPostCompleto}
-          >
-            ELIMINAR PRODUCTO
-          </Button>
-          {/* handleOpenAlert */}
-          <Button variant="contained" color="info" onClick={() => {}}>
-            APLICAR DESCUENTO
-          </Button>
-        </div>
-        <div style={{ margin: 10 }}>
-          <Typography variant="subtitle1" gutterBottom>
-            Colores
-          </Typography>
-          {chipscolor.map((chip, index) => (
-            <Chip
-              key={index}
-              label={chip.label}
-              style={{ margin: 3 }}
-              onClick={() => handleDrawerOpen("color", chip)}
-              onDelete={() => handleDeleteChip(chip, "color")}
-            />
-          ))}
-          <IconButton color="primary" onClick={() => handleDrawerOpen("color")}>
-            <AddIcon />
-          </IconButton>
-        </div>
-        <div style={{ margin: 10 }}>
-          <Typography variant="subtitle1" gutterBottom>
-            Tallas
-          </Typography>
-          {chips.map((chip, index) => (
-            <Chip
-              label={`${chip.label} : ${chip.precio}`}
-              style={{ margin: 3 }}
-              onClick={() => handleDrawerOpen("talla", chip)}
-              onDelete={() => handleDeleteChip(chip, "talla")}
-            />
-          ))}
-          <IconButton color="primary" onClick={() => handleDrawerOpen("talla")}>
-            <AddIcon />
-          </IconButton>
-        </div>
-
-        <Grid container spacing={2} marginTop={isMobile ? 5 : 0}>
-          <Grid item xs={12}>
-            <TextField
-              label="Title"
-              variant="outlined"
-              value={title}
-              onChange={handleTitleChange}
-              required
-              fullWidth
-            />
-          </Grid>
-
-          <Grid item xs={12}>
-            <TextField
-              label="Price"
-              variant="outlined"
-              type="number"
-              value={price}
-              onChange={handlePriceChange}
-              required
-              fullWidth
-            />
-          </Grid>
-          {contexto === "Nacional" && (
-            <Box display="flex" alignItems="flex-end" marginY={1} margin={1}>
-              <TextField
-                label="Cantidad"
-                type="number"
-                value={cantidad}
-                onChange={handleCantidad}
-                style={{ marginLeft: "8px" }}
-              />
-              <div style={{ margin: 10, marginLeft: 30 }}>
-                <FormControlLabel
-                  control={
-                    <Switch checked={stock} onChange={handleToggleChange} />
-                  }
-                  label="Stock"
-                />
-              </div>
-            </Box>
-          )}
-
-          <Grid item xs={12}>
-            <TextField
-              label="Details"
-              variant="outlined"
-              multiline
-              rows={4}
-              value={details}
-              onChange={handleDetailsChange}
-              required
-              fullWidth
-            />
-          </Grid>
-
-          <div
-            style={{
+        {/* BOTÓN ELIMINAR (solo si NO vienes desde Ajustes, como en tu lógica) */}
+        {!fromAjustes && (
+          <Box
+            sx={{
               display: "flex",
-              alignContent: "center",
-              alignItems: "center",
+              justifyContent: "flex-end",
+              mt: isMobile ? 4 : 0,
+              gap: 1,
             }}
           >
-            <Button type="submit" variant="contained" color="primary">
-              PUBLICAR
+            <Button
+              variant="contained"
+              color="error"
+              onClick={eliminarPostCompleto}
+              disabled={savingAny}
+            >
+              ELIMINAR PRODUCTO
             </Button>
-          </div>
-        </Grid>
-        {number && <p>Entered number: {number}</p>}
+
+            <Button variant="contained" color="info" onClick={() => setIsAlertOpen(true)}>
+              APLICAR DESCUENTO
+            </Button>
+          </Box>
+        )}
+
+        {/* Mensajes */}
+        <Box sx={{ mt: 2 }}>
+          {mainMsg && (
+            <MUIAlert severity={mainMsg.startsWith("✅") ? "success" : "warning"}>
+              {mainMsg}
+            </MUIAlert>
+          )}
+          {pesoMsg && (
+            <MUIAlert sx={{ mt: 1 }} severity={pesoMsg.startsWith("✅") ? "success" : "warning"}>
+              {pesoMsg}
+            </MUIAlert>
+          )}
+          {subGeneroMsg && (
+            <MUIAlert sx={{ mt: 1 }} severity={subGeneroMsg.startsWith("✅") ? "success" : "warning"}>
+              {subGeneroMsg}
+            </MUIAlert>
+          )}
+          {mediaMsg && (
+            <MUIAlert sx={{ mt: 1 }} severity={mediaMsg.startsWith("✅") ? "success" : "warning"}>
+              {mediaMsg}
+            </MUIAlert>
+          )}
+        </Box>
+
+        {/* AJUSTES: Subcategoría + Género */}
+        {fromAjustes && (
+          <Box sx={{ mt: 2, p: 1 }}>
+            <Typography variant="subtitle1" gutterBottom>
+              Subcategoría y Género (Moda & Accesorios)
+            </Typography>
+
+            <Typography variant="body2" sx={{ mb: 1, opacity: 0.85 }}>
+              Subcategoría actual: <b>{subcategoriaActual || "Sin subcategoría"}</b>
+              {" · "}
+              Género actual: <b>{generoActual || "Sin género"}</b>
+              {!esModa && (
+                <>
+                  {" · "}
+                  <b style={{ color: "red" }}>No es Moda</b>
+                </>
+              )}
+            </Typography>
+
+            <Typography variant="subtitle2" sx={{ mt: 1, mb: 1, opacity: 0.9 }}>
+              Subcategorías
+            </Typography>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
+              {SUBCATEGORIAS_MODA.map((s) => (
+                <Chip
+                  key={s}
+                  label={s}
+                  color={selectedSubcategoria === s ? "primary" : "default"}
+                  variant={selectedSubcategoria === s ? "filled" : "outlined"}
+                  onClick={() => setSelectedSubcategoria(s)}
+                  sx={{ mb: 1 }}
+                />
+              ))}
+            </Stack>
+
+            <Typography variant="subtitle2" sx={{ mt: 1, mb: 1, opacity: 0.9 }}>
+              Género
+            </Typography>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
+              {GENEROS.map((g) => (
+                <Chip
+                  key={g}
+                  label={g}
+                  color={selectedGenero === g ? "primary" : "default"}
+                  variant={selectedGenero === g ? "filled" : "outlined"}
+                  onClick={() => setSelectedGenero(g)}
+                  sx={{ mb: 1 }}
+                />
+              ))}
+            </Stack>
+
+            <Button
+              variant="contained"
+              onClick={saveSubcategoriaGenero}
+              disabled={savingSubGenero || !selectedSubcategoria || !selectedGenero}
+              sx={{ mt: 1 }}
+              fullWidth
+            >
+              {savingSubGenero ? "Guardando..." : "GUARDAR SUBCATEGORÍA Y GÉNERO"}
+            </Button>
+
+            <Divider sx={{ mt: 2 }} />
+          </Box>
+        )}
+
+        {/* AJUSTES: Peso */}
+        {fromAjustes && (
+          <Box sx={{ mt: 2, p: 1 }}>
+            <Typography variant="subtitle1" gutterBottom>
+              Peso (Aéreo)
+            </Typography>
+
+            <Typography variant="body2" sx={{ mb: 1, opacity: 0.85 }}>
+              Peso actual: <b>{pesoActual ? `${pesoActual}` : "Sin peso asignado"}</b>
+            </Typography>
+
+            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
+              {PESOS.map((p) => (
+                <Chip
+                  key={p.nombre}
+                  label={p.nombre}
+                  color={selectedPeso === p.nombre ? "primary" : "default"}
+                  variant={selectedPeso === p.nombre ? "filled" : "outlined"}
+                  onClick={() => setSelectedPeso(p.nombre)}
+                  sx={{ mb: 1 }}
+                />
+              ))}
+            </Stack>
+
+            <Button
+              variant="contained"
+              onClick={savePeso}
+              disabled={savingPeso || !selectedPeso}
+              sx={{ mt: 1 }}
+              fullWidth
+            >
+              {savingPeso ? "Guardando peso..." : "GUARDAR PESO"}
+            </Button>
+
+            <Divider sx={{ mt: 2 }} />
+          </Box>
+        )}
+
+        {/* AJUSTES: Media */}
+        {fromAjustes && (
+          <Grid container spacing={2} sx={{ mt: 2 }}>
+            <Grid item xs={12}>
+              {img ? (
+                <Typography variant="subtitle1" gutterBottom color="red">
+                  YA TIENE IMAGEN REAL
+                </Typography>
+              ) : (
+                <Box>
+                  <Typography variant="subtitle1" gutterBottom>
+                    Media del producto
+                  </Typography>
+
+                  <TextField
+                    label="Link del video (se guarda en campo id)"
+                    variant="outlined"
+                    value={videoLink}
+                    onChange={(e) => setVideoLink(e.target.value)}
+                    fullWidth
+                    placeholder="https://..."
+                    sx={{ mb: 2 }}
+                  />
+
+                  <Button variant="outlined" component="label" disabled={savingMedia}>
+                    Seleccionar imágenes reales (máx. 2)
+                    <input
+                      type="file"
+                      hidden
+                      accept="image/*"
+                      multiple
+                      onChange={handleRealImagesUpload}
+                    />
+                  </Button>
+
+                  {realImages.length > 0 && (
+                    <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: "wrap" }}>
+                      {realImages.map((file, i) => (
+                        <Box key={i} sx={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                          <Box
+                            component="img"
+                            src={URL.createObjectURL(file)}
+                            alt={`real-new-${i}`}
+                            sx={{ width: 90, height: 90, objectFit: "cover", borderRadius: 2 }}
+                          />
+                          <Button size="small" color="error" onClick={() => handleRemoveRealImage(i)}>
+                            Quitar
+                          </Button>
+                        </Box>
+                      ))}
+                    </Stack>
+                  )}
+
+                  {imagenesReales.length > 0 && (
+                    <>
+                      <Typography variant="caption" sx={{ display: "block", mt: 2 }}>
+                        Guardadas actualmente:
+                      </Typography>
+                      <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap" }}>
+                        {imagenesReales.map((url, i) => (
+                          <Box
+                            key={i}
+                            component="img"
+                            src={url}
+                            alt={`real-saved-${i}`}
+                            sx={{ width: 90, height: 90, objectFit: "cover", borderRadius: 2 }}
+                          />
+                        ))}
+                      </Stack>
+                    </>
+                  )}
+
+                  <Button
+                    variant="contained"
+                    color="secondary"
+                    onClick={saveMedia}
+                    disabled={savingMedia}
+                    fullWidth
+                    sx={{ mt: 2 }}
+                  >
+                    {savingMedia ? "Subiendo media..." : "SUBIR MEDIA"}
+                  </Button>
+                </Box>
+              )}
+            </Grid>
+          </Grid>
+        )}
+
+        {/* NO Ajustes: editor normal */}
+        {!fromAjustes && (
+          <>
+            {/* Colores */}
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle1" gutterBottom>
+                Colores
+              </Typography>
+              {chipscolor.map((chip, index) => (
+                <Chip
+                  key={chip.id ?? index}
+                  label={chip.label}
+                  sx={{ m: 0.5 }}
+                  onClick={() => handleDrawerOpen("color", chip)}
+                  onDelete={() => handleDeleteChip(chip, "color")}
+                />
+              ))}
+              <IconButton color="primary" onClick={() => handleDrawerOpen("color")}>
+                <AddIcon />
+              </IconButton>
+            </Box>
+
+            {/* Tallas */}
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle1" gutterBottom>
+                Tallas
+              </Typography>
+              {chips.map((chip, index) => (
+                <Chip
+                  key={chip.id ?? index}
+                  label={`${chip.label} : ${chip.precio}`}
+                  sx={{ m: 0.5 }}
+                  onClick={() => handleDrawerOpen("talla", chip)}
+                  onDelete={() => handleDeleteChip(chip, "talla")}
+                />
+              ))}
+              <IconButton color="primary" onClick={() => handleDrawerOpen("talla")}>
+                <AddIcon />
+              </IconButton>
+            </Box>
+
+            {/* Form */}
+            <Grid container spacing={2} sx={{ mt: 2 }}>
+              <Grid item xs={12}>
+                <TextField
+                  label="Title"
+                  variant="outlined"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  required
+                  fullWidth
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <TextField
+                  label="Price"
+                  variant="outlined"
+                  type="number"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  required
+                  fullWidth
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <TextField
+                  label="Details"
+                  variant="outlined"
+                  multiline
+                  rows={4}
+                  value={details}
+                  onChange={(e) => setDetails(e.target.value)}
+                  required
+                  fullWidth
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={saveMain}
+                  disabled={savingMain}
+                  fullWidth
+                >
+                  {savingMain ? "Guardando..." : "GUARDAR DATOS"}
+                </Button>
+              </Grid>
+            </Grid>
+          </>
+        )}
+
+        {/* Dialog descuento */}
+        {number != null && <p>Entered number: {number}</p>}
         <AlertComponent
           isOpen={isAlertOpen}
-          onClose={handleCloseAlert}
+          onClose={() => setIsAlertOpen(false)}
           onConfirm={handleConfirmAlert}
         />
+
+        {/* Confirm delete chip */}
         <Alert
           open={open}
           message={"Seguro que desea borrar este valor?"}
           onClose={handleCloses}
-          onConfirm={handleConfirm}
+          onConfirm={handleConfirmDeleteChip}
         />
+
+        {/* Drawer chips */}
         <Drawer anchor="right" open={drawerOpen} onClose={handleDrawerClose}>
           <Box sx={{ width: 300, padding: 2 }}>
             <Typography variant="h6" gutterBottom>
               {drawerType === "color" ? "Nuevo Color" : "Nueva Talla"}
             </Typography>
 
-            {/* Siempre habilitado */}
             <TextField
               label={drawerType === "color" ? "Color" : "Talla"}
               value={newColor}
@@ -733,7 +1050,6 @@ const EditarPost = () => {
               margin="normal"
             />
 
-            {/* Solo habilitado si es tipo con precio */}
             {drawerType === "talla" && (
               <TextField
                 label="Precio"
@@ -745,13 +1061,7 @@ const EditarPost = () => {
               />
             )}
 
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={handleSaveNew}
-              sx={{ mt: 2 }}
-              fullWidth
-            >
+            <Button variant="contained" color="primary" onClick={handleSaveNew} sx={{ mt: 2 }} fullWidth>
               Guardar
             </Button>
           </Box>
