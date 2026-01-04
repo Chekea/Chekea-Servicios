@@ -633,7 +633,7 @@ const navigate = useNavigate();
       const productoRef = doc(db, "productos", codigoCreado);
       await updateDoc(productoRef, {
         Imgreal: true,
-        imagenesreales: urls,
+        ireal: urls,
         id: (videoLinkReal || "").trim(),
       });
 

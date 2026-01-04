@@ -549,7 +549,7 @@ const EditarPost = () => {
           realImages.map((file, i) => uploadRealImageFile(file, i + 1))
         );
         const urls = uploaded.filter(Boolean).slice(0, 2);
-        payload.imagenesreales = urls;
+        payload.ireal = urls;
 
         setImagenesReales(urls);
         setRealImages([]);
