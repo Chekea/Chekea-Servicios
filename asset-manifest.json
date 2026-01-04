@@ -1,27 +1,25 @@
 {
   "files": {
     "main.css": "/Chekea-Servicios/static/css/main.593ecbda.css",
-    "main.js": "/Chekea-Servicios/static/js/main.08f83cb2.js",
+    "main.js": "/Chekea-Servicios/static/js/main.5a208f6e.js",
     "static/js/988.0fc5c201.chunk.js": "/Chekea-Servicios/static/js/988.0fc5c201.chunk.js",
     "static/js/655.6f21535a.chunk.js": "/Chekea-Servicios/static/js/655.6f21535a.chunk.js",
     "static/js/499.c22c7a8b.chunk.js": "/Chekea-Servicios/static/js/499.c22c7a8b.chunk.js",
-    "static/js/291.a04a48fa.chunk.js": "/Chekea-Servicios/static/js/291.a04a48fa.chunk.js",
+    "static/js/291.8ff74cb4.chunk.js": "/Chekea-Servicios/static/js/291.8ff74cb4.chunk.js",
     "static/js/821.14baf177.chunk.js": "/Chekea-Servicios/static/js/821.14baf177.chunk.js",
-    "static/js/412.3ba7ff9b.chunk.js": "/Chekea-Servicios/static/js/412.3ba7ff9b.chunk.js",
+    "static/js/412.00a1823b.chunk.js": "/Chekea-Servicios/static/js/412.00a1823b.chunk.js",
     "static/js/671.abf97bff.chunk.js": "/Chekea-Servicios/static/js/671.abf97bff.chunk.js",
     "static/js/720.22ce70fb.chunk.js": "/Chekea-Servicios/static/js/720.22ce70fb.chunk.js",
-    "static/js/564.924c6668.chunk.js": "/Chekea-Servicios/static/js/564.924c6668.chunk.js",
+    "static/js/335.fffd3ee0.chunk.js": "/Chekea-Servicios/static/js/335.fffd3ee0.chunk.js",
     "static/js/206.53c48c4b.chunk.js": "/Chekea-Servicios/static/js/206.53c48c4b.chunk.js",
-    "static/js/277.aeb6a8c2.chunk.js": "/Chekea-Servicios/static/js/277.aeb6a8c2.chunk.js",
-    "static/js/246.f003a95b.chunk.js": "/Chekea-Servicios/static/js/246.f003a95b.chunk.js",
+    "static/js/246.66bf8957.chunk.js": "/Chekea-Servicios/static/js/246.66bf8957.chunk.js",
     "static/js/122.fb92897a.chunk.js": "/Chekea-Servicios/static/js/122.fb92897a.chunk.js",
-    "static/js/620.484a7ee8.chunk.js": "/Chekea-Servicios/static/js/620.484a7ee8.chunk.js",
     "static/media/Linotte-Regular.ttf": "/Chekea-Servicios/static/media/Linotte-Regular.e6583154eeda6d7b0b48.ttf",
     "static/media/Linotte-SemiBold.ttf": "/Chekea-Servicios/static/media/Linotte-SemiBold.63463789e30b16c728de.ttf",
     "index.html": "/Chekea-Servicios/index.html"
   },
   "entrypoints": [
     "static/css/main.593ecbda.css",
-    "static/js/main.08f83cb2.js"
+    "static/js/main.5a208f6e.js"
   ]
 }
