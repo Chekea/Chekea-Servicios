@@ -145,12 +145,12 @@ const ProductoTodo = () => {
   const handleCantidad = useCallback(async () => {
     if (!userName) return;
 
-    const cacheKey = `${USER_INFO_CACHE_KEY}_${userName}`;
-    const cached = getCachedData(cacheKey);
-    if (cached) {
-      setNombre(cached);
-      return;
-    }
+    // const cacheKey = `${USER_INFO_CACHE_KEY}_${userName}`;
+    // const cached = getCachedData(cacheKey);
+    // if (cached) {
+    //   setNombre(cached);
+    //   return;
+    // }
 
     try {
       const aslyRef = doc(db, "GE_Info", "Nombres");
