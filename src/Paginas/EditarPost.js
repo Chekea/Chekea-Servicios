@@ -542,7 +542,7 @@ const EditarPost = () => {
     try {
       const productoRef = doc(db, "productos", codigo);
 
-      const payload = { id: videoLink?.trim() || "" };
+      const payload = { vid: videoLink?.trim() || "" };
 
       if (realImages.length > 0) {
         const uploaded = await Promise.all(

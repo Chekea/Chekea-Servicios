@@ -634,7 +634,7 @@ const navigate = useNavigate();
       await updateDoc(productoRef, {
         Imgreal: true,
         ireal: urls,
-        id: (videoLinkReal || "").trim(),
+        vid: (videoLinkReal || "").trim(),
       });
 
       setImagenesReales(urls);
