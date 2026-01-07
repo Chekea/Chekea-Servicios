@@ -111,7 +111,7 @@ const ImagePreview = ({ file, onRemove, index }) => {
 const categorias = [
   {
     nombre: "Moda & Accesorios",
-    subcategorias: ["Trajes", "Vestidos", "Bolsos", "Pantalones", "Calzado", "Camisas", "Otros"],
+    subcategorias: ["Trajes", "Vestidos", "Bolsos", "Pantalones", "Calzado", "Camisas",'Tallas Grandes', "Otros"],
   },
   {
     nombre: "Complementos para peques",
