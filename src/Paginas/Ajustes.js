@@ -227,7 +227,7 @@ const Ajustes = () => {
   // ✅ Fetch productos (Firestore)
   // ------------------------
   const fetchProducts = useCallback(
-    async ({ pageSize = 15 } = {}) => {
+    async ({ pageSize = 30 } = {}) => {
       if (!userName) {
         console.log('no hay')
         return [];
@@ -244,7 +244,7 @@ const Ajustes = () => {
   where("visible", "==", true),
   where("Imgreal", "==", false),
   where("Categoria", "==", "Moda & Accesorios"),
-  limit(pageSize)
+  limit(25)
 );
 
 
@@ -273,7 +273,7 @@ const Ajustes = () => {
     }
 
     try {
-      const items = await fetchProducts({ pageSize: 15 });
+      const items = await fetchProducts({ pageSize: 30 });
       setProducts(items);
       saveProductsToCache({ items, savedAt: Date.now() });
       initEvalsFromItems(items);

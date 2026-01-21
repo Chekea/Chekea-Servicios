@@ -190,7 +190,7 @@ const ProductoTodo = () => {
       priceRange,
       selectedCountry,
       lastVisible = null,
-      pageSize = 8
+      pageSize = 10
     ) => {
       const cacheKey = `${PRODUCTS_DATA_CACHE_KEY}_${userName}_${searchName}_${selectedCategory}_${selectedCountry}`;
 
