@@ -347,3 +347,4 @@ export const sendNotif = async (path) => {
     return null;
   }
 };
+

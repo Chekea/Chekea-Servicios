@@ -16,7 +16,7 @@ import {
 } from "@mui/material";
 
 const items = [
-  { name: "Compras", link: "/Nacional" },
+  { name: "Compras", link: "/Exterior" },
   { name: "Publicados", link: "/Buscar" },
   { name: "Modulo", link: "/Ajustes" },
 
@@ -41,7 +41,7 @@ const Principal = ({ email, logout }) => {
 
     // Si es 01 → mostrar MaisaProd y Publicar
     if (user === "01" || user === "001" || user === "1" || user === "11") {
-      return ["Publicados", "Publicar",'Modulo'].includes(item.name);
+      return ["Publicados", "Publicar",'Modulo','Compras'].includes(item.name);
     }
 
     // Si es 001 → mostrar Compras y Exterior

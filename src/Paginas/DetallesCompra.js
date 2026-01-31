@@ -273,13 +273,13 @@ const DetallesCompra = () => {
   const handleCompra = (valor) => {
     setOpen(true);
 
-    carddata.forEach((producto) => {
-      handleObjecto(producto, valor);
+    // carddata.forEach((producto) => {
+    //   handleObjecto(producto, valor);
 
-      // const id = producto.id;
-      // const vendedor = data.Comprador;
-      // fetchData(vendedor, id);
-    });
+    //   // const id = producto.id;
+    //   // const vendedor = data.Comprador;
+    //   // fetchData(vendedor, id);
+    // });
   };
   console.log(data.Imagen, "hay o no");
 
@@ -387,52 +387,21 @@ const DetallesCompra = () => {
                   >
                     <Grid container spacing={2}>
                       <Grid item xs={6}>
-                        <Typography variant="body1" sx={{ color: "gray" }}>
-                          Nombre
-                        </Typography>
-                        <Typography variant="body1" sx={{ color: "gray" }}>
-                          Barrio
-                        </Typography>
-                        <Typography variant="body1" sx={{ color: "gray" }}>
-                          Contacto
-                        </Typography>
-                        <Typography variant="body1" sx={{ color: "gray" }}>
-                          Lugar de Retiro
-                        </Typography>
+                       
+                        
+                        
+                         
 
                         <Typography variant="body1" sx={{ color: "gray" }}>
-                          Intervalo
+                          Beneficio
                         </Typography>
                       </Grid>
                       <Grid item xs={6}>
-                        <Typography variant="body1">{data.Nombre}</Typography>
-                        <Typography variant="body1">
-                          {data.Barrio === undefined
-                            ? "Sin Especificar"
-                            : data.Barrio}
-                        </Typography>
-                        <div style={{ display: "flex" }}>
-                          <Typography variant="body1" marginRight={3}>
-                            {data.Contacto}
-                          </Typography>
-
-                          <CopyToClipboard
-                            text={data.Contacto}
-                            onCopy={onCopyText}
-                          >
-                            <button>Copiar </button>
-                          </CopyToClipboard>
-                        </div>
-                        <Typography variant="body1">
-                          {data.RetiroLugar === undefined
-                            ? "Sin Especificar"
-                            : data.RetiroLugar}
-                        </Typography>
+                        
+                         
 
                         <Typography variant="body1">
-                          {data.Intervalo === undefined
-                            ? "Sin Especificar"
-                            : data.Intervalo}
+                        (5%) = 1000 xfas
                         </Typography>
                       </Grid>
                     </Grid>
@@ -470,6 +439,14 @@ const DetallesCompra = () => {
                           marginTop: "10px",
                         }}
                       >
+                         <Button
+                          onClick={() => handleCompra("Comprado")}
+                          variant="contained"
+                          color='success'
+                          style={{ borderRadius: "20px", marginRight: "14px" }}
+                        >
+                          RECIBIDO 
+                        </Button>
                         <Button
                           onClick={() => handleCompra("Comprado")}
                           variant="contained"
@@ -575,27 +552,17 @@ const DetallesCompra = () => {
                         </Typography>
 
                         <Typography variant="body1" sx={{ color: "gray" }}>
-                          Intervalo
+                          Beneficio
                         </Typography>
+                        
                       </Grid>
                       <Grid item xs={6}>
-                        <Typography variant="body1">{data.Nombre}</Typography>
+                      
                         <Typography variant="body1">
-                          {data.Barrio === undefined
-                            ? "Sin Especificar"
-                            : data.Barrio}
+                          <Typography variant="body1">
+                        (5%) = 1000 xfas
                         </Typography>
-                        <Typography variant="body1">{data.Contacto}</Typography>
-                        <Typography variant="body1">
-                          {data.RetiroLugar === undefined
-                            ? "Sin Especificar"
-                            : data.RetiroLugar}
-                        </Typography>
-
-                        <Typography variant="body1">
-                          {data.Intervalo === undefined
-                            ? "Sin Especificar"
-                            : data.Intervalo}
+                        
                         </Typography>
                       </Grid>
                     </Grid>
