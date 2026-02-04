@@ -4,14 +4,17 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { extract } from "../../ayuda";
 
-function CajaItem({ dats, valor }) {
+function CajaItem({ dats, valor,userName }) {
   const navigate = useNavigate();
   const theme = createTheme(); // Create a theme instance
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const [data, setData] = useState(dats);
 
   const handleClick = (codigo) => {
-    navigate(`/${valor}/Detalles/${codigo}`);
+navigate(`/${valor}/Detalles/${codigo}`, {
+  state: { userName },
+});
+    
 
     // Navigate to the details page with codigo and context as URL parameters
   };
@@ -19,7 +22,7 @@ function CajaItem({ dats, valor }) {
   console.log(dats);
   return dats?.map((item) => (
     <Box
-      onClick={() => handleClick(item.Codigo, item.Contexto)}
+      onClick={() => handleClick(item.id)}
       sx={{
         display: "flex",
         justifyContent: "space-between",
@@ -38,12 +41,10 @@ function CajaItem({ dats, valor }) {
       }}
       key={item.Codigo}
     >
-      <Typography>{item.CompraId}</Typography>
-      {item.Contexto === "Exterior" && (
+      <Typography>{item.id}</Typography>
         <Typography color={item.Estado !== "Retirado" ? "red" : null}>
           {item.Estado}
         </Typography>
-      )}
     </Box>
   ));
 }

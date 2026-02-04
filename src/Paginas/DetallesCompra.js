@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useCallback, useMemo, useState } from "react";
 import {
   Grid,
   Box,
@@ -6,681 +6,533 @@ import {
   useTheme,
   Typography,
   Button,
+  Divider,
 } from "@mui/material";
-import ProductosCard from "./componentes/ProductosCard";
-import { useNavigate, useParams } from "react-router";
-import { getDatabase, ref, onValue, get } from "firebase/database";
 import CircularProgress from "@mui/material/CircularProgress";
-import app from "../Servicios/firebases";
-import Alert from "./componentes/Alert";
-import {
-  RemoveVaue,
-  RemoveVaueDB,
-  UpdateDb,
-  WriteDb,
-  WriteDbPush,
-  sendNotif,
-} from "../Servicios/DBservices";
-import { extract, sendNotification } from "../ayuda";
-import { CopyToClipboard } from "react-copy-to-clipboard";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import { useParams, useLocation } from "react-router";
+
+import ProductosCard from "./componentes/ProductosCard";
 import Cabezal from "./componentes/Cabezal";
-import axios from "axios";
+
+import app from "../Servicios/firebases";
+
+// ✅ Firestore
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  onSnapshot,
+  serverTimestamp,
+  runTransaction,
+  writeBatch,
+} from "firebase/firestore";
+
+const SUBCOL_PRODUCTOS = "miscompras"; // compradores/{uid}/miscompras/{id}
 
 const DetallesCompra = () => {
   const [loading, setLoading] = useState(true);
-  const [enviado, setEnviado] = useState("");
-  const [mensaje, setmensaje] = useState(
-    "Seguro que ya se envio ese producto?"
-  );
 
-  const [data, setData] = useState(true);
-  const [userData, setUserData] = useState([]);
-  const [object, setobject] = useState(null);
+  const [data, setData] = useState(null); // compra (compras/{codigo})
+  const [serviciosIds, setServiciosIds] = useState([]); // ids (strings) de miscompras/{id}
+  const [carddata, setCardData] = useState([]); // productos cargados
 
-  const [carddata, setcarddata] = useState([]);
-
-  const [extractedData, setExtractedProductos] = useState(null);
   const theme = useTheme();
-  const database = getDatabase(app);
-
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-  const { codigo, contexto } = useParams(); // Access the URL parameter
-  const [open, setOpen] = useState(false);
+  const { codigo } = useParams();
 
-  const sendWhatsAppMessage = () => {
-    const phoneNumber = `+8613212074721`; // Replace with the target phone number
-    const message = `Buenas, se necesita verificacion para que Chekea envie su compra ${data.CompraId} , basta con responder con un OK`; // Replace with your message
-    const appUrl = `whatsapp://send?phone=${phoneNumber}&text=${encodeURIComponent(
-      message
-    )}`;
+  // ✅ Identidad NO por Auth: viene por location.state.userName
+  const location = useLocation();
+  const userName = (location.state?.userName || "").trim();
+  const currentSeller = userName;
 
-    // Function to detect if the user is on a mobile device
-    const isMobileDevice = () => {
-      return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    };
+  const db = useMemo(() => getFirestore(app), []);
 
-    if (isMobileDevice()) {
-      // Create a temporary link to test the app URL scheme
-      const tempLink = document.createElement("a");
-      tempLink.href = appUrl;
-      tempLink.style.display = "none";
-      document.body.appendChild(tempLink);
+  // ============================================================
+  // Helpers precio (igual que tenías)
+  // ============================================================
+  const PRECIO_REAL = useCallback((precioFinal) => {
+    const f = Number(precioFinal || 0);
+    if (f <= 0) return 0;
 
-      // Attempt to open the WhatsApp app
-      tempLink.click();
+    const base1 = (f - 1500) / 1.3;
+    if (base1 > 0 && base1 <= 7000) return Math.round(base1);
 
-      // Remove the temporary link
-      setTimeout(() => {
-        document.body.removeChild(tempLink);
-      }, 500);
-    } else {
-      alert("Please use a mobile device to send the WhatsApp message.");
-    }
-  };
+    const base2 = (f - 1000) / 1.22;
+    if (base2 > 7000 && base2 <= 25000) return Math.round(base2);
 
-  // Example button to trigger the function
-  <button onClick={sendWhatsAppMessage}>Send WhatsApp Message</button>;
+    const base3 = f / 1.15;
+    if (base3 > 25000 && base3 <= 250000) return Math.round(base3);
 
-  const receiveForChild = (object, botton) => {
-    // checkear el estado si ya se envio o no
-    setOpen(true);
-    setEnviado(botton);
-    if (botton === "Enviado") {
-      setobject({
-        ...object,
-        Estado: "Enviado", // Update the value of Estado field
-        Envio: new Date().getTime(),
-      });
-    } else {
-      setmensaje(
-        `Seguro que el producto de codigo ${extract(
-          String(data.CompraId)
-        )} ya fue retirado?\n\n PORFAVOR ASEGURESE!!!`
-      );
+    const base4 = f / 1.12;
+    if (base4 > 250000 && base4 <= 500000) return Math.round(base4);
 
-      setobject({
-        ...object,
-        Estado: "Retirado", // Update the value of Estado field
-        Retiro: new Date().getTime(),
-      });
-    }
-  };
+    const base5 = (f - 100000) / 1.08;
+    return Math.round(base5);
+  }, []);
 
-  const handleClose = () => {
-    setOpen(false);
-  };
+  const PRECIO_5_PERCENT = useCallback((precioFinal) => {
+    const p = Number(precioFinal || 0);
+    return Math.round(p * 0.05);
+  }, []);
 
-  const handleConfirm = async () => {
-    // Handle confirm action
-    const { token } = await sendNotif(`GE/Token/${data.Comprador}`);
-    console.log("Estado final en el componente:", object, data);
+  // ============================================================
+  // Estado/candado compra
+  // ============================================================
+  const compraEstadoCandado = data?.compraEstado || "Libre"; // Libre | Cogida
+  const compraCogidaPor = String(data?.compraCogidaPor || "");
+  const esMiaLaCompra = compraEstadoCandado === "Cogida" && compraCogidaPor === currentSeller;
 
-    const { Compras } = await sendNotif(`GE/Exterior/Prod/${object.Producto}`);
+  // Estado global (lo que mandas a TODOS)
+  const estadoGlobal = String(data?.Estado || ""); // "" | Comprado | Error | Enviado | Retirado
 
-    console.log(token, Compras, "hola");
+  const compradorId = String(data?.Usuario || "").trim();
 
-    switch (enviado) {
-      case "Enviado":
-        RemoveVaueDB(
-          `GE/Comprador/${data.Comprador}/MisCompras/Verificando/${object.Codigo}`
-        )
-          .then(() => {
-            WriteDb(
-              object,
-              `GE/Comprador/${data.Comprador}/MisCompras/Enviado/${object.Codigo}`
-            ).then(() => {
-              UpdateDb(
-                { Estado: "Enviado" },
-                `GE/Compras/${object.contexto}/${codigo}`
-              );
-              UpdateDb(
-                { Compras: Compras + 1 },
-                `GE/Exterior/Prod/${object.Producto}/`
-              );
-              // enviar datas al nodo y hacer listening in cservices
-              fetchNotification(
-                token,
-                "Producto Enviado",
-                "Producto ha sido enviado satisfactoriamente"
-              );
-            });
-          })
-          .catch((error) => {
-            console.error("Error deleting node:", error);
-            // Handle error situation here
-          });
-        break;
-      case "Comprado":
-        UpdateDb(
-          { Estado: "Comprado" },
-          `GE/Comprador/${data.Comprador}/MisCompras/Verificando/${object.Codigo}`
-        ).then(() => {
-          UpdateDb({ Estado: "Comprado" }, `GE/Compras/Exterior/${codigo}`);
+  const idsLimpios = useMemo(() => {
+    return Array.isArray(serviciosIds)
+      ? serviciosIds.map((x) => String(x).trim()).filter(Boolean)
+      : [];
+  }, [serviciosIds]);
 
-          fetchNotification(
-            token,
-            "Producto Comprado",
-            "Producto a esperas de ser enviado"
-          );
+  // ============================================================
+  // 1) Listener compra: compras/{codigo}
+  // ============================================================
+  useEffect(() => {
+    if (!codigo) return;
+
+    setLoading(true);
+    const compraRef = doc(db, "compras", String(codigo).trim());
+
+    const unsub = onSnapshot(
+      compraRef,
+      (snap) => {
+        if (!snap.exists()) {
+          setData(null);
+          setServiciosIds([]);
+          setCardData([]);
+          setLoading(false);
+          return;
+        }
+
+        const compra = { id: snap.id, ...snap.data() };
+        setData(compra);
+
+        const ids = Array.isArray(compra.Servicios) ? compra.Servicios : [];
+        setServiciosIds(ids.map((x) => String(x).trim()).filter(Boolean));
+
+        setLoading(false);
+      },
+      (err) => {
+        console.error("Error escuchando compra:", err);
+        setLoading(false);
+      }
+    );
+
+    return () => unsub();
+  }, [db, codigo]);
+
+  // ============================================================
+  // 2) Leer productos: compradores/{uid}/miscompras/{prodId}
+  // ============================================================
+  useEffect(() => {
+    const run = async () => {
+      if (!compradorId) {
+        setCardData([]);
+        return;
+      }
+      if (!idsLimpios.length) {
+        setCardData([]);
+        return;
+      }
+
+      try {
+        setCardData([]);
+
+        const promises = idsLimpios.map(async (prodId) => {
+          const prodRef = doc(db, "compradores", compradorId, SUBCOL_PRODUCTOS, prodId);
+          const prodSnap = await getDoc(prodRef);
+          return prodSnap.exists() ? { id: prodSnap.id, ...prodSnap.data() } : null;
         });
 
-        break;
-      case "Error":
-        RemoveVaueDB(
-          `GE/Comprador/${data.Comprador}/MisCompras/Verificando/${object.Codigo}`
-        )
-          .then(() => {
-            WriteDb(
-              object,
-              `GE/Comprador/${data.Comprador}/MisCompras/Error/${object.Codigo}`
-            ).then(() => {
-              UpdateDb({ Estado: "Error" }, `GE/Compras/Exterior/${codigo}`);
-              // enviar datos al nodo y hacer listening in cservices
-              fetchNotification(
-                token,
-                "Error de Compra",
-                "Contacte a atencion al cliente"
-              );
-            });
-          })
-          .catch((error) => {
-            console.error("Error deleting node:", error);
-            // Handle error situation here
-          });
-        break;
-      case "Retirado":
-        RemoveVaueDB(
-          `GE/Comprador/${data.Comprador}/MisCompras/Enviado/${object.Codigo}`
-        )
-          .then(() => {
-            WriteDb(
-              object,
-              `GE/Comprador/${data.Comprador}/MisCompras/Retirado/${object.Codigo}`
-            );
-            UpdateDb(
-              { Estado: "Retirado" },
-              `GE/Compras/${object.contexto}/${codigo}`
-            );
-          })
-          .catch((error) => {
-            console.error("Error deleting node:", error);
-            // Handle error situation here
-          });
-        break;
-      default:
-        console.log("ninguno");
-        break;
-    }
+        const productos = (await Promise.all(promises)).filter(Boolean);
+        setCardData(productos);
+      } catch (err) {
+        console.error("Error cargando productos:", err);
+      }
+    };
 
-    handleClose();
-  };
+    run();
+  }, [db, compradorId, idsLimpios]);
 
-  const fetchNotification = async (tokens, tittles, texts) => {
+  // ============================================================
+  // Acciones GLOBAL
+  // ============================================================
+
+  // ✅ 1) COGER COMPRA (solo candado en compras/{codigo})
+  const cogerCompra = useCallback(async () => {
     try {
-      const { Servidor } = await sendNotif(`GE/Info`);
+      if (!codigo) return;
+      if (!currentSeller) {
+        alert("Falta userName (location.state.userName).");
+        return;
+      }
 
-      const response = await axios.get(`${Servidor}/notification`, {
-        params: {
-          token: tokens,
-          titulo: tittles,
-          texto: texts,
-        },
+      const compraRef = doc(db, "compras", String(codigo).trim());
+
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(compraRef);
+        if (!snap.exists()) throw new Error("Compra no existe.");
+
+        const compra = snap.data() || {};
+        const candado = compra.compraEstado || "Libre";
+
+        if (candado !== "Libre") {
+          throw new Error("Esta compra ya fue cogida por otra vendedora.");
+        }
+
+        tx.update(compraRef, {
+          compraEstado: "Cogida",
+          compraCogidaPor: currentSeller,
+          compraCogidaAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      });
+    } catch (e) {
+      console.error(e);
+      alert(e?.message || "No se pudo coger la compra.");
+    }
+  }, [db, codigo, currentSeller]);
+
+  // ✅ helper: actualiza Estado en compra + todos miscompras (BATCH)
+  const setEstadoGlobalBatch = useCallback(
+    async (nextEstado) => {
+      if (!codigo) return;
+      if (!compradorId) {
+        alert("Falta data.Usuario (compradorId).");
+        return;
+      }
+      if (!idsLimpios.length) {
+        alert("No hay serviciosIds para actualizar.");
+        return;
+      }
+
+      const compraRef = doc(db, "compras", String(codigo).trim());
+      const batch = writeBatch(db);
+
+      // compras/{codigo}
+      batch.update(compraRef, { Estado: nextEstado, updatedAt: serverTimestamp() });
+
+      // compradores/{uid}/miscompras/{id} (TODOS)
+      for (const prodId of idsLimpios) {
+        const prodRef = doc(db, "compradores", compradorId, SUBCOL_PRODUCTOS, prodId);
+        batch.update(prodRef, { Estado: nextEstado });
+      }
+
+      await batch.commit();
+
+      // UX local (no depende de esto, pero mejora)
+      setCardData((prev) => prev.map((p) => ({ ...p, Estado: nextEstado })));
+    },
+    [db, codigo, compradorId, idsLimpios]
+  );
+
+  // ✅ 2) COMPRADO / ERROR (valida candado y dueña, luego set Estado global)
+  const marcarComprado = useCallback(async () => {
+    try {
+      if (!currentSeller) {
+        alert("Falta userName (location.state.userName).");
+        return;
+      }
+      if (!codigo) return;
+
+      const compraRef = doc(db, "compras", String(codigo).trim());
+
+      // Validación fuerte en TX (para que nadie cierre si no la cogió)
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(compraRef);
+        if (!snap.exists()) throw new Error("Compra no existe.");
+
+        const compra = snap.data() || {};
+        const candado = compra.compraEstado || "Libre";
+        const cogidaPor = String(compra.compraCogidaPor || "");
+
+        if (candado !== "Cogida") throw new Error("La compra no está cogida.");
+        if (cogidaPor !== currentSeller) throw new Error("La compra la cogió otra vendedora.");
+
+        // Solo dejamos una marca de cierre (sin tocar miscompras aquí)
+        tx.update(compraRef, { compraCerradaAt: serverTimestamp(), updatedAt: serverTimestamp() });
       });
 
-      console.log("Response:", response.data);
-    } catch (error) {
-      console.error("Error fetching notification:", error);
+      // Actualización global (compra + todos miscompras)
+      await setEstadoGlobalBatch("Comprado");
+    } catch (e) {
+      console.error(e);
+      alert(e?.message || "No se pudo marcar Comprado.");
     }
-  };
+  }, [db, codigo, currentSeller, setEstadoGlobalBatch]);
 
-  const handleObjecto = (obj, valor) => {
-    setEnviado(valor);
+  const marcarError = useCallback(async () => {
+    try {
+      if (!currentSeller) {
+        alert("Falta userName (location.state.userName).");
+        return;
+      }
+      if (!codigo) return;
 
-    // Crear un nuevo objeto basado en el valor recibido
-    let newObject = { ...obj, Estado: valor };
+      const compraRef = doc(db, "compras", String(codigo).trim());
 
-    if (valor === "Enviado") {
-      newObject.Envio = new Date().getTime();
-    } else if (valor === "Retirado") {
-      newObject.Retiro = new Date().getTime();
-    }
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(compraRef);
+        if (!snap.exists()) throw new Error("Compra no existe.");
 
-    // Establecer el estado asegurando la actualización
-    setobject((prevObj) => ({
-      ...prevObj,
-      ...newObject,
-    }));
+        const compra = snap.data() || {};
+        const candado = compra.compraEstado || "Libre";
+        const cogidaPor = String(compra.compraCogidaPor || "");
 
-    // Mensaje según el estado
-    let mensaje = `Seguro que el producto de código ${extract(
-      String(data.CompraId)
-    )} ya fue ${valor.toLowerCase()}?\n\n POR FAVOR ASEGÚRESE!!!`;
+        if (candado !== "Cogida") throw new Error("La compra no está cogida.");
+        if (cogidaPor !== currentSeller) throw new Error("La compra la cogió otra vendedora.");
 
-    setmensaje(mensaje);
-
-    // Esperar a que el estado se actualice antes de imprimir
-    setTimeout(() => {
-      console.log("Estado actualizado:", newObject);
-    }, 100);
-  };
-
-  // Escuchar cambios en el objeto para verificar la actualización
-  useEffect(() => {
-    console.log("Estado final en el componente:", object, data);
-  }, [object]);
-
-  const handleCompra = (valor) => {
-    setOpen(true);
-
-    // carddata.forEach((producto) => {
-    //   handleObjecto(producto, valor);
-
-    //   // const id = producto.id;
-    //   // const vendedor = data.Comprador;
-    //   // fetchData(vendedor, id);
-    // });
-  };
-  console.log(data.Imagen, "hay o no");
-
-  useEffect(() => {
-    let da = [];
-    const fetchData = () => {
-      setLoading(true); // Set loading state to true when fetching data
-
-      const databaseRef = ref(database, `GE/Compras/${contexto}/${codigo}`);
-      onValue(databaseRef, (snapshot) => {
-        setData(snapshot.val());
-        const productosArray = Object.values(snapshot.val().Productos);
-
-        setUserData(productosArray);
-        setLoading(false); // Set loading state to true when fetching data
-      });
-    };
-
-    fetchData();
-
-    // Cleanup function to unsubscribe when component unmounts
-    return () => {
-      // Unsubscribe from database
-    };
-  }, []); // Empty dependency array means this effect runs once after the component mounts
-
-  const [hasFetchedData, setHasFetchedData] = useState(false);
-
-  useEffect(() => {
-    if (!hasFetchedData && userData.length !== 0) {
-      const fetchData = (vendedor, codigo) => {
-        console.log(data.Estado, "entar");
-        let valor =
-          data.Estado === "Comprado" || data.Estado === "Verificando..."
-            ? "Verificando"
-            : data.Estado;
-        const databaseRef = ref(
-          database,
-          `GE/Comprador/${vendedor}/MisCompras/${valor}/${codigo}`
-        );
-        get(databaseRef)
-          .then((snapshot) => {
-            if (snapshot.exists()) {
-              console.log(snapshot.val(), "hold man");
-              setcarddata((prevData) => [...prevData, snapshot.val()]);
-              console.log(snapshot.val());
-              setHasFetchedData(true);
-            } else {
-              console.log("No data available");
-            }
-          })
-          .catch((error) => {
-            console.error("Error fetching data:", error);
-          });
-      };
-
-      userData.forEach((producto) => {
-        const id = producto.id;
-        const vendedor = data.Comprador;
-        fetchData(vendedor, id);
+        tx.update(compraRef, { compraCerradaAt: serverTimestamp(), updatedAt: serverTimestamp() });
       });
 
-      // Update the state variable to indicate that data has been fetched
+      await setEstadoGlobalBatch("Error");
+    } catch (e) {
+      console.error(e);
+      alert(e?.message || "No se pudo marcar Error.");
     }
+  }, [db, codigo, currentSeller, setEstadoGlobalBatch]);
 
-    // Cleanup function to unsubscribe when component unmounts
-    return () => {
-      // Unsubscribe from database
-    };
-  }, [userData, hasFetchedData]);
-  const [textToCopy, setTextToCopy] = useState(""); // The text you want to copy
-  const [copyStatus, setCopyStatus] = useState(false); // To indicate if the text was copied
-  const navigate = useNavigate();
-  const handleBackClick = () => {
-    navigate(-1); // Go back to the previous page
-  };
-  const onCopyText = () => {
-    setCopyStatus(true);
-    setTimeout(() => setCopyStatus(false), 2000); // Reset status after 2 seconds
-  };
-  return (
-    <div>
-      {!loading ? (
-        <div style={{ paddingTop: "10px" }}>
-          <Alert
-            open={open}
-            message={mensaje}
-            onClose={handleClose}
-            onConfirm={handleConfirm}
-          />
+  // ✅ 3) ENVIADO (solo si Estado == Comprado)
+  const marcarEnviado = useCallback(async () => {
+    try {
+      if (!currentSeller) {
+        alert("Falta userName (location.state.userName).");
+        return;
+      }
+      if (estadoGlobal !== "Comprado") {
+        alert("Solo puedes marcar ENVIADO si la compra está en COMPRADO.");
+        return;
+      }
+      await setEstadoGlobalBatch("Enviado");
+    } catch (e) {
+      console.error(e);
+      alert(e?.message || "No se pudo marcar Enviado.");
+    }
+  }, [currentSeller, estadoGlobal, setEstadoGlobalBatch]);
 
-          <Grid container>
-            {!isMobile ? (
-              // Horizontal layout for desktop
+  // ✅ 4) RETIRADO (solo si Estado == Enviado) + actualiza a TODOS
+  const marcarRetirado = useCallback(async () => {
+    try {
+      if (!currentSeller) {
+        alert("Falta userName (location.state.userName).");
+        return;
+      }
+      if (estadoGlobal !== "Enviado") {
+        alert("Solo puedes marcar RETIRADO si la compra está en ENVIADO.");
+        return;
+      }
+      await setEstadoGlobalBatch("Retirado");
+    } catch (e) {
+      console.error(e);
+      alert(e?.message || "No se pudo marcar Retirado.");
+    }
+  }, [currentSeller, estadoGlobal, setEstadoGlobalBatch]);
+
+  // ============================================================
+  // Render
+  // ============================================================
+  if (loading) {
+    return (
+      <div
+        style={{
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+        }}
+      >
+        <CircularProgress />
+      </div>
+    );
+  }
+
+  const RenderPanelGlobal = () => {
+    const disabledNoUser = !currentSeller;
+
+    // Reglas UI global:
+    // - Retirado: no botones
+    // - Enviado: solo Retirado
+    // - Comprado: solo Enviado
+    // - Si no está Comprado/Error/Enviado/Retirado:
+    //   - Libre: Coger
+    //   - Cogida (mía): Comprado + Error
+    const esFinal = estadoGlobal === "Retirado";
+
+    return (
+      <Box sx={{ p: 2, mt: 2, border: "1px solid #eee", borderRadius: 2 }}>
+        <Typography variant="h6" sx={{ mb: 1 }}>
+          Gestión GLOBAL de la compra
+        </Typography>
+
+        <Typography variant="caption" sx={{ display: "block", color: "gray" }}>
+          Vendedora: {currentSeller || "(sin userName)"} | Candado: {compraEstadoCandado}
+          {compraCogidaPor ? ` | CogidaPor: ${compraCogidaPor}` : ""}
+          {estadoGlobal ? ` | Estado: ${estadoGlobal}` : ""}
+        </Typography>
+
+        {!currentSeller && (
+          <Typography variant="body2" sx={{ color: "error.main", mt: 1 }}>
+            ⚠️ Falta userName (location.state.userName).
+          </Typography>
+        )}
+
+        <Box sx={{ display: "flex", gap: 1, mt: 2, flexWrap: "wrap" }}>
+          {/* RETIRADO => nada */}
+          {esFinal && (
+            <Typography variant="body2" sx={{ color: "success.main", mt: 0.5 }}>
+              ✅ Finalizado (RETIRADO)
+            </Typography>
+          )}
+
+          {/* ENVIADO => RETIRADO */}
+          {!esFinal && estadoGlobal === "Enviado" && (
+            <Button
+              variant="contained"
+              size="small"
+              onClick={marcarRetirado}
+              disabled={disabledNoUser}
+            >
+              RETIRADO
+            </Button>
+          )}
+
+          {/* COMPRADO => ENVIADO */}
+          {!esFinal && estadoGlobal === "Comprado" && (
+            <Button
+              variant="contained"
+              size="small"
+              onClick={marcarEnviado}
+              disabled={disabledNoUser}
+            >
+              ENVIADO
+            </Button>
+          )}
+
+          {/* Error: estado global */}
+          {!esFinal && estadoGlobal === "Error" && (
+            <Typography variant="body2" sx={{ color: "error.main", mt: 0.5 }}>
+              ❌ Compra marcada como ERROR
+            </Typography>
+          )}
+
+          {/* Si todavía no está en estados finales */}
+          {!esFinal &&
+            estadoGlobal !== "Comprado" &&
+            estadoGlobal !== "Enviado" &&
+            estadoGlobal !== "Error" && (
               <>
-                <Grid item xs={6}>
-                  <h2>{`INFORMACION COMPRA\n\nCodigo:${data.CompraId} `}</h2>
-
-                  <Box
-                    sx={{
-                      p: 1,
-                      display: "flex",
-                      justifyContent: "center",
-                    }}
+                {compraEstadoCandado === "Libre" && (
+                  <Button
+                    variant="contained"
+                    size="small"
+                    onClick={cogerCompra}
+                    disabled={disabledNoUser}
                   >
-                    <Grid container spacing={2}>
-                      <Grid item xs={6}>
-                       
-                        
-                        
-                         
+                    COGER COMPRA
+                  </Button>
+                )}
 
-                        <Typography variant="body1" sx={{ color: "gray" }}>
-                          Beneficio
-                        </Typography>
-                      </Grid>
-                      <Grid item xs={6}>
-                        
-                         
-
-                        <Typography variant="body1">
-                        (5%) = 1000 xfas
-                        </Typography>
-                      </Grid>
-                    </Grid>
-                  </Box>
-
-                  {data.Imagen !== null ? (
-                    <div
-                      style={{
-                        display: "flex",
-                        marginTop: "10px",
-                        justifyContent: "center",
-                        alignItems: "center",
-                      }}
+                {compraEstadoCandado === "Cogida" && esMiaLaCompra && (
+                  <>
+                    <Button
+                      variant="contained"
+                      size="small"
+                      onClick={marcarComprado}
+                      disabled={disabledNoUser}
                     >
-                      <div style={{ width: "50%", height: "50%" }}>
-                        <img
-                          src={data?.Imagen}
-                          alt="Image"
-                          style={{
-                            width: "100%",
-                            height: "50%",
-                            objectFit: "contain",
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ) : null}
-                  {data.Contexto === "Exterior" ? (
-                    data.Estado === "Verificando..." ? (
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "center",
-                          marginBottom: "10px",
-                          marginTop: "10px",
-                        }}
-                      >
-                         <Button
-                          onClick={() => handleCompra("Comprado")}
-                          variant="contained"
-                          color='success'
-                          style={{ borderRadius: "20px", marginRight: "14px" }}
-                        >
-                          RECIBIDO 
-                        </Button>
-                        <Button
-                          onClick={() => handleCompra("Comprado")}
-                          variant="contained"
-                          color="primary"
-                          style={{ borderRadius: "20px", marginRight: "14px" }}
-                        >
-                          Comprado
-                        </Button>
-                        <Button
-                          onClick={() => handleCompra("Error")}
-                          variant="contained"
-                          color="error"
-                          style={{ borderRadius: "10px", marginRight: "14px" }}
-                        >
-                          Error
-                        </Button>
-                      </div>
-                    ) : data.Estado === "Comprado" ? (
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "center",
-                          marginBottom: "10px",
-                          marginTop: "10px",
-                        }}
-                      >
-                        <Button
-                          onClick={() => handleCompra("Enviado")}
-                          variant="contained"
-                          color="primary"
-                          style={{ borderRadius: "20px", marginRight: "14px" }}
-                        >
-                          Enviado
-                        </Button>
-                      </div>
-                    ) : data.Estado === "Enviado" ? (
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "center",
-                          marginBottom: "10px",
-                          marginTop: "10px",
-                        }}
-                      >
-                        <Button
-                          onClick={() => handleCompra("Retirado")}
-                          variant="contained"
-                          color="primary"
-                          style={{ borderRadius: "20px", marginRight: "14px" }}
-                        >
-                          Retirado
-                        </Button>
-                      </div>
-                    ) : null
-                  ) : null}
-                </Grid>
-                {enviado === "" ? (
-                  <Grid item xs={6}>
-                    <h2>{`${carddata.length} PRODUCTOS COMPRADOS `}</h2>
-
-                    <Box
-                      sx={{
-                        p: 2,
-
-                        flexDirection: "row",
-                      }}
+                      COMPRADO
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={marcarError}
+                      disabled={disabledNoUser}
                     >
-                      <ProductosCard
-                        data={carddata}
-                        enviado={receiveForChild}
-                      />
-                    </Box>
-                  </Grid>
-                ) : null}
+                      ERROR
+                    </Button>
+                  </>
+                )}
+
+                {compraEstadoCandado === "Cogida" && !esMiaLaCompra && (
+                  <Typography variant="body2" sx={{ color: "warning.main", mt: 0.5 }}>
+                    Compra cogida por otra vendedora (bloqueado)
+                  </Typography>
+                )}
               </>
-            ) : (
-              // Vertical layout for mobile
-              <div>
-                <Cabezal texto={"Detalles"} />
-
-                <Box
-                  sx={{
-                    display: "flex",
-                    paddingTop: 5,
-                    justifyContent: "center",
-                  }}
-                >
-                  <Grid item xs={10}>
-                    <h2>{`INFORMACION COMPRA \n\nCodigo:${data.CompraId} `}</h2>
-                    <Grid container spacing={2}>
-                      <Grid item xs={6}>
-                        <Typography variant="body1" sx={{ color: "gray" }}>
-                          Nombre
-                        </Typography>
-                        <Typography variant="body1" sx={{ color: "gray" }}>
-                          Barrio
-                        </Typography>
-                        <Typography variant="body1" sx={{ color: "gray" }}>
-                          Contacto
-                        </Typography>
-                        <Typography variant="body1" sx={{ color: "gray" }}>
-                          Lugar de Retiro
-                        </Typography>
-
-                        <Typography variant="body1" sx={{ color: "gray" }}>
-                          Beneficio
-                        </Typography>
-                        
-                      </Grid>
-                      <Grid item xs={6}>
-                      
-                        <Typography variant="body1">
-                          <Typography variant="body1">
-                        (5%) = 1000 xfas
-                        </Typography>
-                        
-                        </Typography>
-                      </Grid>
-                    </Grid>
-                    <ProductosCard data={carddata} enviado={receiveForChild} />
-                  </Grid>
-                </Box>
-              </div>
             )}
-          </Grid>
+        </Box>
 
-          {isMobile ? (
-            <div>
-              {data.Imagen !== null ? (
-                <div
-                  style={{
-                    display: "flex",
-                    marginTop: "10px",
-                    justifyContent: "center",
-                    alignItems: "center",
-                  }}
-                >
-                  <div style={{ width: "50%", height: "50%" }}>
-                    <img
-                      src={data.Imagen}
-                      alt="Image"
-                      style={{
-                        width: "100%",
-                        height: "50%",
-                        objectFit: "contain",
-                      }}
-                    />
-                  </div>
+        <Divider sx={{ mt: 2 }} />
+      </Box>
+    );
+  };
+
+  return (
+    <div style={{ paddingTop: "10px" }}>
+      <Grid container>
+        {!isMobile ? (
+          <>
+            <Grid item xs={6}>
+              <Box sx={{ p: 1, display: "flex", justifyContent: "center" }}>
+                <Grid item xs={10}>
+                  <h2>{`INFORMACION COMPRA \n\nCodigo:${data?.Fecha ?? ""} `}</h2>
+
+                  <Grid container spacing={2}>
+                    <Grid item xs={6}>
+                      <Typography variant="body1" sx={{ color: "gray" }}>
+                        Precio de compra
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="body1">{1000}</Typography>
+                    </Grid>
+                  </Grid>
+ 
+                </Grid>
+              </Box>
+
+              {/* <div style={{ display: "flex", marginTop: 10, justifyContent: "center" }}>
+                <div style={{ width: "50%", height: "50%" }}>
+                  <img
+                    src={data?.img}
+                    alt="Image"
+                    style={{ width: "100%", height: "50%", objectFit: "contain" }}
+                  />
                 </div>
-              ) : null}
+              </div> */}
+            </Grid>
 
-              {data.Contexto === "Exterior" ? (
-                data.Estado === "Verificando..." ? (
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "center",
-                      marginBottom: "10px",
-                      marginTop: "10px",
-                    }}
-                  >
-                    <Button
-                      onClick={() => handleCompra("Comprado")}
-                      variant="contained"
-                      color="primary"
-                      style={{ borderRadius: "20px", marginRight: "14px" }}
-                    >
-                      Comprado
-                    </Button>
-                    <Button
-                      onClick={() => handleCompra("Error")}
-                      variant="contained"
-                      color="error"
-                      style={{ borderRadius: "10px", marginRight: "14px" }}
-                    >
-                      Error
-                    </Button>
-                  </div>
-                ) : data.Estado === "Comprado" ? (
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "center",
-                      marginBottom: "10px",
-                      marginTop: "10px",
-                    }}
-                  >
-                    <Button
-                      onClick={() => handleCompra("Enviado")}
-                      variant="contained"
-                      color="primary"
-                      style={{ borderRadius: "20px", marginRight: "14px" }}
-                    >
-                      Enviado
-                    </Button>
-                  </div>
-                ) : data.Estado === "Enviado" ? (
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "center",
-                      marginBottom: "10px",
-                      marginTop: "10px",
-                    }}
-                  >
-                    <Button
-                      onClick={() => handleCompra("Retirado")}
-                      variant="contained"
-                      color="primary"
-                      style={{ borderRadius: "20px", marginRight: "14px" }}
-                    >
-                      Retirado
-                    </Button>
-                  </div>
-                ) : null
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      ) : (
-        <div
-          style={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-          }}
-        >
-          <CircularProgress />
-        </div>
-      )}
-      {data.Contexto === "Nacional" && (
-        <button onClick={sendWhatsAppMessage}>CONFIRMAR COMPRA </button>
-      )}
+            <Grid item xs={6}>
+              <h2>{`${carddata.length} PRODUCTOS`}</h2>
+              <Box sx={{ p: 2 }}>
+                <RenderPanelGlobal />
+
+                {/* ✅ Global: ProductosCard solo muestra. No ejecuta cambios */}
+                <ProductosCard data={carddata} enviado={() => {}} />
+              </Box>
+            </Grid>
+          </>
+        ) : (
+          <div style={{ width: "100%" }}>
+            <Cabezal texto={"Detalles"} />
+            <Box sx={{ display: "flex", paddingTop: 5, justifyContent: "center" }}>
+              <Grid item xs={10}>
+                <RenderPanelGlobal />
+                <ProductosCard data={carddata} enviado={() => {}} />
+              </Grid>
+            </Box>
+          </div>
+        )}
+      </Grid>
     </div>
   );
 };

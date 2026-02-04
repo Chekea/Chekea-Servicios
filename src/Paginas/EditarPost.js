@@ -45,11 +45,11 @@ import {
   setDoc,
   updateDoc,
 } from "firebase/firestore";
+import app from "./../Servicios/firebases";
 
 // ✅ Router (lo normal es react-router-dom)
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
-import app from "./../Servicios/firebases";
 import Cabezal from "./componentes/Cabezal";
 import Alert from "./componentes/Alert";
 import { compressImage } from "../ayuda";

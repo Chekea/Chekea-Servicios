@@ -1,107 +1,112 @@
-import React, { memo, useEffect, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
 import CajaItem from "./componentes/CajaItem";
+import Cabezal from "./componentes/Cabezal";
+
 import { useMediaQuery, useTheme } from "@mui/material";
-import {
-  getDatabase,
-  ref,
-  onValue,
-  query,
-  orderByChild,
-  equalTo,
-  limitToLast,
-  update,
-  runTransaction,
-  get,
-  endAt,
-  startAt,
-} from "firebase/database";
 import CircularProgress from "@mui/material/CircularProgress";
 
 import app from "./../Servicios/firebases";
-import { analizar } from "../ayuda";
-import { useNavigate } from "react-router";
-import Cabezal from "./componentes/Cabezal";
+import {
+  getFirestore,
+  collection,
+  query,
+  orderBy,
+  limit,
+  getDocs,
+} from "firebase/firestore";
+
+// ✅ Recibir state al navegar
+import { useLocation } from "react-router"; // <-- (si tu proyecto usa react-router-dom, cámbialo a "react-router-dom")
+
 const MemoizedCajaItem = memo(CajaItem);
 
+/**
+ * ✅ Cache a nivel módulo
+ */
+let exteriorCache = {
+  data: null,
+  firstId: null,
+  lastFetchAt: null,
+};
+
 function Exterior() {
-  const [selectedChip, setSelectedChip] = useState(null);
-  const [loading, setLoading] = useState(true);
   const theme = useTheme();
-  const navigate = useNavigate();
-
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-  const [data, setData] = useState([]);
-  const database = getDatabase(app);
 
-  const handleChipClick = (chipValue) => {
-    setSelectedChip(chipValue === selectedChip ? null : chipValue);
-  };
-  const fetchData = (codigo, estado) => {
-    const databaseRef = ref(database, "GE/Compras/Exterior");
-    let queryRef;
+  const db = useMemo(() => getFirestore(app), []);
 
-    if (data.length !== 0) {
-      console.log("volvio 0");
+  // ✅ RECIBIR userName desde navigation state
+  const location = useLocation();
+  const userName = location.state?.userName || "";
 
-      queryRef = query(
-        databaseRef,
-        orderByChild("Codigo"),
-        endAt(codigo),
-        limitToLast(6)
+  const [data, setData] = useState(() => exteriorCache.data ?? []);
+  const [loading, setLoading] = useState(false);
+  const [hasNews, setHasNews] = useState(false);
+
+  const ORDER_FIELD = "Fecha";
+
+  const fetchLast10 = useCallback(async () => {
+    try {
+      setLoading(true);
+
+      const comprasRef = collection(db, "compras");
+      const q = query(comprasRef, orderBy(ORDER_FIELD, "desc"), limit(10));
+
+      const snap = await getDocs(q);
+      const fresh = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+      const newFirstId = fresh[0]?.id ?? null;
+
+      const changed = Boolean(
+        exteriorCache.firstId && newFirstId && newFirstId !== exteriorCache.firstId
       );
-    } else {
-      console.log("volvio 1");
+      setHasNews(changed);
 
-      queryRef = query(databaseRef, limitToLast(16));
+      exteriorCache = {
+        data: fresh,
+        firstId: newFirstId,
+        lastFetchAt: Date.now(),
+      };
+
+      setData(fresh);
+    } catch (err) {
+      console.error("Error fetching Compras/Exterior:", err);
+    } finally {
+      setLoading(false);
     }
-
-    get(queryRef)
-      .then((snapshot) => {
-        const newData = [];
-        snapshot.forEach((childSnapshot) => {
-          const childData = childSnapshot.val();
-          console.log(childData.Codigo);
-          if (childData && !analizar(childData.Codigo, data)) {
-            newData.unshift(childData);
-          }
-        });
-        if (data.length !== 0) {
-          console.log("mantenimiento");
-          setData((old) => [...old, ...newData]);
-        } else {
-          setData(newData);
-        }
-        setLoading(false);
-
-        if (newData.length === 0) {
-          console.log("no existe");
-          setLoading(false);
-        }
-      })
-      .catch((error) => {
-        console.error("Error fetching data:", error);
-        setLoading(false);
-      });
-  };
+  }, [db]);
 
   useEffect(() => {
-    fetchData();
+    if (exteriorCache.data?.length) {
+      setData(exteriorCache.data);
+    }
+  }, []);
 
-    // Cleanup function to unsubscribe when component unmounts
-    return () => {
-      // Unsubscribe from database
-    };
-  }, []); // Empty dependency array means this effect runs once after the component mounts
+  const showInitialSpinner = loading && data.length === 0;
+  const isEmpty = !loading && Array.isArray(data) && data.length === 0;
 
   return (
-    <div
-      style={{
-        marginTop: isMobile ? 65 : 10,
-        scrollBehavior: "smooth", // Added for smooth scroll
-      }}
-    >
-      <Cabezal texto={"Exterior"} />
-      {loading ? (
+    <div style={{ marginTop: isMobile ? 65 : 10, scrollBehavior: "smooth" }}>
+      <Cabezal texto="Exterior" />
+
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          gap: 12,
+          marginTop: 12,
+          marginBottom: 12,
+          alignItems: "center",
+        }}
+      >
+        <button onClick={fetchLast10} disabled={loading}>
+          {loading ? "Actualizando..." : "Refrescar"}
+        </button>
+
+        {!loading && hasNews && <span style={{ fontSize: 14 }}>🆕 Hay novedades</span>}
+      </div>
+
+      {showInitialSpinner ? (
         <div
           style={{
             position: "absolute",
@@ -112,8 +117,16 @@ function Exterior() {
         >
           <CircularProgress />
         </div>
+      ) : isEmpty ? (
+        // ✅ NUEVO: mensaje cuando está vacío
+        <div style={{ display: "flex", justifyContent: "center", marginTop: 18 }}>
+          <p style={{ color: "gray", fontSize: 14, textAlign: "center", maxWidth: 420 }}>
+            No hay compras para mostrar ahora mismo. Pulsa <b>Refrescar</b> en unos segundos.
+          </p>
+        </div>
       ) : (
-        <MemoizedCajaItem dats={data} venta={false} valor="Exterior" />
+        // ✅ PASAR userName A CajaItem (MemoizedCajaItem)
+        <MemoizedCajaItem dats={data} venta={false} valor="Exterior" userName={userName} />
       )}
     </div>
   );
