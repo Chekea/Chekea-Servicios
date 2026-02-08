@@ -2,7 +2,7 @@ import { useTheme } from "@emotion/react";
 import { Box, Typography, createTheme, useMediaQuery } from "@mui/material";
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { extract } from "../../ayuda";
+import { extract, fechas } from "../../ayuda";
 
 function CajaItem({ dats, valor,userName }) {
   const navigate = useNavigate();
@@ -41,8 +41,8 @@ navigate(`/${valor}/Detalles/${codigo}`, {
       }}
       key={item.Codigo}
     >
-      <Typography>{item.id}</Typography>
-        <Typography color={item.Estado !== "Retirado" ? "red" : null}>
+      <Typography>{fechas(item.id)}</Typography>
+        <Typography color={item.Estado === "Verificando" ? "red" : null}>
           {item.Estado}
         </Typography>
     </Box>

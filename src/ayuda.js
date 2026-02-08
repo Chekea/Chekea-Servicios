@@ -145,3 +145,25 @@ const dataURItoBlob = (dataURI) => {
   }
   return new Blob([ab], { type: mimeString });
 };
+
+const dateFormatter = new Intl.DateTimeFormat('es-ES', {
+  year: 'numeric',
+  month: 'numeric',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: 'numeric',
+  second: 'numeric',
+});
+export const fechas = timestamp => {
+  if (!timestamp) return 'Sin fecha';
+
+  // Si es un Timestamp de Firestore
+  if (timestamp.toDate) {
+    timestamp = timestamp.toDate();
+  }
+
+  const date = new Date(timestamp);
+  if (isNaN(date)) return 'Fecha inválida';
+
+  return dateFormatter.format(date);
+};

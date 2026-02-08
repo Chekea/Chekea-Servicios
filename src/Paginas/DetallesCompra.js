@@ -10,6 +10,8 @@ import {
 } from "@mui/material";
 import CircularProgress from "@mui/material/CircularProgress";
 import { useParams, useLocation } from "react-router";
+import {  Snackbar } from "@mui/material";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 
 import ProductosCard from "./componentes/ProductosCard";
 import Cabezal from "./componentes/Cabezal";
@@ -46,6 +48,24 @@ const DetallesCompra = () => {
   const currentSeller = userName;
 
   const db = useMemo(() => getFirestore(app), []);
+
+const [copied, setCopied] = useState(false);
+
+const copyAddress = useCallback(async () => {
+  if (!data) return;
+
+  const textToCopy = `Chekea Servicios 18171337454 广东东莞市石碣镇崇焕中路111号(马拉博仓库) Ch-${String(
+    data.id ?? ""
+  ).slice(-5)} - ${data.contacto ?? ""}`;
+
+  try {
+    await navigator.clipboard.writeText(textToCopy);
+    setCopied(true);
+  } catch (error) {
+    console.error("Error copiando dirección:", error);
+  }
+}, [data]);
+
 
   // ============================================================
   // Helpers precio (igual que tenías)
@@ -483,21 +503,37 @@ const DetallesCompra = () => {
           <>
             <Grid item xs={6}>
               <Box sx={{ p: 1, display: "flex", justifyContent: "center" }}>
-                <Grid item xs={10}>
-                  <h2>{`INFORMACION COMPRA \n\nCodigo:${data?.Fecha ?? ""} `}</h2>
+               <Grid item xs={10}>
+  <h2>{`INFORMACION COMPRA\n\nCodigo: ${data?.Fecha ?? ""}`}</h2>
+<Typography variant="body1" sx={{ color: "red" }}>
+  ⚠️ IMPORTANTE !!! Copiar la direccion SOLO si va directo a la AGENCIA
+</Typography>
 
-                  <Grid container spacing={2}>
-                    <Grid item xs={6}>
-                      <Typography variant="body1" sx={{ color: "gray" }}>
-                        Precio de compra
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="body1">{1000}</Typography>
-                    </Grid>
-                  </Grid>
- 
-                </Grid>
+
+  <Typography variant="body1" sx={{  mt: 1 }}>
+    Chekea Servicios 18171337454 广东东莞市石碣镇崇焕中路111号(马拉博仓库)
+    {" "}Ch-{String(data?.id).slice(-5)} - {data?.contacto}
+  </Typography>
+
+  <Button
+    variant="outlined"
+    size="small"
+    startIcon={<ContentCopyIcon />}
+    sx={{ mt: 1 }}
+    onClick={copyAddress}
+    disabled={!data}
+  >
+    Copiar dirección
+  </Button>
+
+  <Snackbar
+    open={copied}
+    autoHideDuration={2000}
+    onClose={() => setCopied(false)}
+    message="Dirección copiada"
+  />
+</Grid>
+
               </Box>
 
               {/* <div style={{ display: "flex", marginTop: 10, justifyContent: "center" }}>
