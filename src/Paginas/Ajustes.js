@@ -241,9 +241,8 @@ const Ajustes = () => {
 
      const q = query(
   productosRef,
-  where("visible", "==", true),
   where("Imgreal", "==", false),
-  where("Categoria", "==", "Moda & Accesorios"),
+  where("Categoria", "==", "Complementos para peques"),
   limit(25)
 );
 

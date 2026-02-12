@@ -504,7 +504,7 @@ const copyAddress = useCallback(async () => {
             <Grid item xs={6}>
               <Box sx={{ p: 1, display: "flex", justifyContent: "center" }}>
                <Grid item xs={10}>
-  <h2>{`INFORMACION COMPRA\n\nCodigo: ${data?.Fecha ?? ""}`}</h2>
+  <h2> INFORMACION COMPRA:  CH-{String(data?.id).slice(-5)}</h2>
 <Typography variant="body1" sx={{ color: "red" }}>
   ⚠️ IMPORTANTE !!! Copiar la direccion SOLO si va directo a la AGENCIA
 </Typography>

@@ -69,17 +69,14 @@ const PESOS = [
 
 // Subcategorías
 const SUBCATEGORIAS_MODA = [
-  "Trajes",
-  "Vestidos",
-  "Bolsos",
-  "Pantalones",
-  "Calzado",
-  "Camisas",
+  "Moda",
+  "Bebes",
+  "Educacion",
   "Otros",
+ 
 ];
 
 // Género
-const GENEROS = ["Femenina", "Masculina", "Mixto"];
 
 // ---------------------- Alert descuento ----------------------
 const AlertComponent = ({ isOpen, onClose, onConfirm }) => {
@@ -169,8 +166,6 @@ const EditarPost = () => {
   const [selectedSubcategoria, setSelectedSubcategoria] = useState("");
   const [subcategoriaActual, setSubcategoriaActual] = useState("");
 
-  const [selectedGenero, setSelectedGenero] = useState("");
-  const [generoActual, setGeneroActual] = useState("");
 
   const [savingSubGenero, setSavingSubGenero] = useState(false);
   const [subGeneroMsg, setSubGeneroMsg] = useState("");
@@ -237,9 +232,7 @@ const EditarPost = () => {
         const genFromDB = productData?.Genero ?? "";
         setSubcategoriaActual(subFromDB);
         setSelectedSubcategoria(subFromDB);
-        setGeneroActual(genFromDB);
-        setSelectedGenero(genFromDB);
-
+  
         // Peso
         const pesoFromDB = productData?.Peso ?? "";
         setPesoActual(pesoFromDB);
@@ -421,32 +414,24 @@ const EditarPost = () => {
   const saveSubcategoriaGenero = useCallback(async () => {
     setSubGeneroMsg("");
 
-    const esModa = (data?.Categoria ?? "").toLowerCase().includes("moda");
-    if (!esModa) {
-      setSubGeneroMsg("❌ Este producto no es de Moda & Accesorios.");
-      return;
-    }
+    
 
     if (!selectedSubcategoria) {
       setSubGeneroMsg("❌ Selecciona una subcategoría antes de guardar.");
       return;
     }
-    if (!selectedGenero) {
-      setSubGeneroMsg("❌ Selecciona un género antes de guardar.");
-      return;
-    }
+     
 
     setSavingSubGenero(true);
     try {
       const productoRef = doc(db, "productos", codigo);
       await setDoc(
         productoRef,
-        { Subcategoria: selectedSubcategoria, Genero: selectedGenero },
+        { Subcategoria: selectedSubcategoria },
         { merge: true }
       );
 
       setSubcategoriaActual(selectedSubcategoria);
-      setGeneroActual(selectedGenero);
 
       setSubGeneroMsg("✅ Subcategoría y género guardados correctamente.");
     } catch (e) {
@@ -455,7 +440,7 @@ const EditarPost = () => {
     } finally {
       setSavingSubGenero(false);
     }
-  }, [db, codigo, selectedSubcategoria, selectedGenero, data?.Categoria]);
+  }, [db, codigo, selectedSubcategoria,  data?.Categoria]);
 
   // ---------------------- Media (imágenes reales) ----------------------
   const handleRealImagesUpload = useCallback(
@@ -744,7 +729,7 @@ const EditarPost = () => {
             <Typography variant="body2" sx={{ mb: 1, opacity: 0.85 }}>
               Subcategoría actual: <b>{subcategoriaActual || "Sin subcategoría"}</b>
               {" · "}
-              Género actual: <b>{generoActual || "Sin género"}</b>
+              Género actual: <b>{null || "Sin género"}</b>
               {!esModa && (
                 <>
                   {" · "}
@@ -772,7 +757,7 @@ const EditarPost = () => {
             <Typography variant="subtitle2" sx={{ mt: 1, mb: 1, opacity: 0.9 }}>
               Género
             </Typography>
-            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
+            {/* <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
               {GENEROS.map((g) => (
                 <Chip
                   key={g}
@@ -783,16 +768,16 @@ const EditarPost = () => {
                   sx={{ mb: 1 }}
                 />
               ))}
-            </Stack>
+            </Stack> */}
 
             <Button
               variant="contained"
               onClick={saveSubcategoriaGenero}
-              disabled={savingSubGenero || !selectedSubcategoria || !selectedGenero}
+              disabled={savingSubGenero || !selectedSubcategoria }
               sx={{ mt: 1 }}
               fullWidth
             >
-              {savingSubGenero ? "Guardando..." : "GUARDAR SUBCATEGORÍA Y GÉNERO"}
+              {savingSubGenero ? "Guardando..." : "GUARDAR SUBCATEGORÍA "}
             </Button>
 
             <Divider sx={{ mt: 2 }} />
