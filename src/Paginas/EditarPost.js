@@ -69,10 +69,8 @@ const PESOS = [
 
 // Subcategorías
 const SUBCATEGORIAS_MODA = [
-  "Moda",
-  "Bebes",
-  "Educacion",
-  "Otros",
+   
+  "Organizador", "Cocina", "Sala de estar", "Dormitorio", "Baño", "Decoración", "Iluminacion"
  
 ];
 

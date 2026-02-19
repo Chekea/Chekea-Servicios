@@ -242,7 +242,7 @@ const Ajustes = () => {
      const q = query(
   productosRef,
   where("Imgreal", "==", false),
-  where("Categoria", "==", "Complementos para peques"),
+  where("Categoria", "==", "Hogar"),
   limit(25)
 );
 
